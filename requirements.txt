@@ -1,0 +1,6 @@
+Flask
+pydicom
+pandas
+matplotlib
+Werkzeug
+gunicorn

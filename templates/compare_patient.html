@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Compare DLP for Patient {{ patient_id }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 700px; margin: 40px auto; background: #fff; padding: 32px 28px 28px 28px; border-radius: 10px; box-shadow: 0 2px 8px #0001; }
+        h1 { margin-top: 0; color: #2a5d8f; }
+        h2 { color: #333; margin-top: 32px; }
+        .dlp-chart { margin: 28px 0 16px 0; display: block; max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 1px 6px #0001; }
+        table { border-collapse: collapse; margin: 20px 0; width: 100%; min-width: 350px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background: #e4eefd; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:nth-child(odd) { background: #fff; }
+        .no-dlp { color: #b00; margin: 24px 0; }
+        .nav-links { margin-top: 24px; }
+        .nav-links a { margin-right: 18px; color: #2a5d8f; font-weight: bold; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        @media (max-width: 600px) {
+            .container { padding: 12px 2vw; }
+            table, th, td { font-size: 0.97em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Compare DLP for Patient <span style="color:#18446b">{{ patient_id }}</span></h1>
+        {% if plot_url %}
+            <img class="dlp-chart" src="{{ url_for('static', filename=plot_url.split('static/')[1]) }}" alt="DLP Chart for Patient {{ patient_id }}">
+            <h2>Study Table</h2>
+            <table>
+                <tr>
+                    <th>Study Description</th>
+                    <th>Study Date</th>
+                    <th>Total DLP (mGy·cm)</th>
+                    <th>View</th>
+                </tr>
+                {% for r in results %}
+                <tr>
+                    <td>{{ r.study_description }}</td>
+                    <td>{{ r.study_date }}</td>
+                    <td>{{ r.total_dlp }}</td>
+                    <td><a href="{{ url_for('view_report', report_id=r.report_id) }}">View Report</a></td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <div class="no-dlp">No DLP data found for this patient.</div>
+        {% endif %}
+        <div class="nav-links">
+            <a href="{{ url_for('search_patient') }}">&#8592; Back to Patient Search</a>
+            <a href="{{ url_for('list_reports') }}">Back to Report List</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analysis Results</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 900px; margin: 30px auto; background: #fff; padding: 24px 32px 32px 32px; border-radius: 10px; box-shadow: 0 2px 8px #0001; }
+        h1 { margin-top: 0; color: #2a5d8f; }
+        h2 { margin-bottom: 10px; color: #333; }
+        .info-card {
+            background: #f2f8ff;
+            border-radius: 8px;
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px #0001;
+            display: inline-block;
+            min-width: 250px;
+        }
+        .info-list { list-style: none; padding: 0; margin: 0; }
+        .info-list li { margin-bottom: 6px; }
+        .dose-table-container { overflow-x: auto; }
+        table { border-collapse: collapse; margin: 20px 0; width: 100%; min-width: 500px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th {
+            background-color: #e4eefd;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:nth-child(odd) { background: #fff; }
+        .error { color: #b00; margin-bottom: 12px; }
+        .total-dlp {
+            background: #eafbe7;
+            color: #1b6e2a;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-top: 18px;
+            margin-bottom: 18px;
+            display: inline-block;
+        }
+        .nav-links { margin-top: 30px; }
+        .nav-links a { margin-right: 18px; color: #2a5d8f; font-weight: bold; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        @media (max-width: 600px) {
+            .container { padding: 10px 2vw; }
+            .info-card { padding: 10px 2vw; }
+            table, th, td { font-size: 0.95em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DICOM Dose Report Results</h1>
+        <p><strong>Selected Modality:</strong> {{ modality }}</p>
+        {% if errors %}
+            <div class="errors">
+                <h3>Errors:</h3>
+                {% for error in errors %}
+                    <p class="error">{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if info %}
+            <div class="info-card">
+                <ul class="info-list">
+                    <li><strong>Patient ID:</strong> {{ info['Patient ID'] }}</li>
+                    <li><strong>Patient Age:</strong> {{ info['Patient Age'] }}</li>
+                    <li><strong>Study Date:</strong> {{ info['Study Date'] }}</li>
+                    <li><strong>Manufacturer:</strong> {{ info['Manufacturer'] }}</li>
+                    <li><strong>Study Description:</strong> {{ info['Study Description'] }}</li>
+                    <li><strong>Series Description:</strong> {{ info['Series Description'] }}</li>
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if data %}
+            <h2>CT Dose Report</h2>
+            <div class="dose-table-container">
+                <table>
+                    <tr>
+                        <th>Series</th>
+                        <th>Type</th>
+                        <th>CTDIvol (mGy)</th>
+                        <th>DLP (mGy·cm)</th>
+                        <th>Phantom</th>
+                    </tr>
+                    {% for item in data %}
+                    <tr>
+                        <td>{{ item['Series'] }}</td>
+                        <td>{{ item['Type'] }}</td>
+                        <td>{{ item['CTDIvol'] }}</td>
+                        <td>{{ item['DLP'] }}</td>
+                        <td>{{ item['Phantom'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            {% if total_dlp %}
+                <div class="total-dlp">Total Exam DLP: {{ total_dlp }} mGy·cm</div>
+            {% endif %}
+        {% else %}
+            <p>No valid DICOM files processed</p>
+        {% endif %}
+
+        <div class="nav-links">
+            <a href="{{ url_for('list_reports') }}">&#8592; Back to Report List</a>
+            <a href="{{ url_for('search_patient') }}">Search by Patient ID</a>
+            <a href="/upload">Upload More Files</a>
+            <a href="/">Back to Modality Selection</a>
+        </div>
+    </div>
+</body>
+</html>

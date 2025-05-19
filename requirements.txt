@@ -4,3 +4,4 @@ pandas
 matplotlib
 Werkzeug
 gunicorn
+openpyxl

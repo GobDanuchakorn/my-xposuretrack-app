@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import os
 import pydicom
 from werkzeug.utils import secure_filename
@@ -133,12 +133,7 @@ def process_files():
     modality = session.get('modality', None)
     if not modality:
         return redirect(url_for('select_modality'))
-
-    # Clear previous uploads and charts
-    clear_folder(UPLOAD_FOLDER)
-    clear_folder(STATIC_FOLDER, extensions=['.png'])
-    REPORT_INDEX.clear()
-
+    
     uploaded_files = request.files.getlist('files')
     errors = []
     for file in uploaded_files:
@@ -201,6 +196,18 @@ def list_reports():
         total=total
     )
 
+# ========== ลบไฟล์ที่อัปโหลด ==========
+@app.route('/delete_file/<report_id>', methods=['POST'])
+def delete_file(report_id):
+    report = next((r for r in REPORT_INDEX if r['id'] == report_id), None)
+    if not report:
+        return "File not found", 404
+    file_path = os.path.join(UPLOAD_FOLDER, report['save_name'])
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    REPORT_INDEX.remove(report)
+    return redirect(url_for('list_reports'))
+
 @app.route('/report/<report_id>')
 def view_report(report_id):
     report = next((r for r in REPORT_INDEX if r['id'] == report_id), None)
@@ -225,6 +232,8 @@ def compare_dlp():
             'save_name': report['save_name'],
             'modality': report['modality']
         })
+        
+    # Process DLP and study date
     for record in records:
         try:
             ds = pydicom.dcmread(os.path.join(UPLOAD_FOLDER, record['save_name']), stop_before_pixels=True)
@@ -241,13 +250,25 @@ def compare_dlp():
         except Exception:
             record['Total DLP'] = None
             record['study_date'] = ''
+            
+    # Filter valid records
     records = [r for r in records if r['Study Description'] and r['Total DLP'] is not None]
+    
     if not records:
         return render_template('compare_dlp.html', plots=[], tables=[])
+
+    # Prepare data for template
     df = pd.DataFrame(records)
     plots = []
     tables = []
+    
+    # Get unique study descriptions for dropdown
+    study_descriptions = sorted({r['Study Description'] for r in records})
+    selected_study = request.args.get('study_desc')
+
+    # Group by study description
     for study, group in df.groupby('Study Description'):
+        # Generate plot
         plt.figure(figsize=(8, 5))
         plt.bar(group['Patient ID'], group['Total DLP'], color='#95b8d1')
         plt.xlabel('Patient ID')
@@ -260,10 +281,59 @@ def compare_dlp():
         plot_path = os.path.join(STATIC_FOLDER, plot_filename)
         plt.savefig(plot_path)
         plt.close()
+        
+        # Prepare data for template
         plots.append({'study': study, 'plot_url': f'static/{plot_filename}'})
         table = group[['Patient ID', 'study_date', 'Total DLP', 'report_id']].to_dict(orient='records')
         tables.append({'study': study, 'table': table})
-    return render_template('compare_dlp.html', plots=plots, tables=tables)
+
+    return render_template(
+        'compare_dlp.html',
+        plots=plots,
+        tables=tables,
+        study_descriptions=study_descriptions,
+        selected_study=selected_study
+    )
+
+
+# ========== Export to Excel ==========
+@app.route('/export_excel_filtered')
+def export_excel_filtered():
+    study_desc = request.args.get('study_desc')
+    if not study_desc:
+        return redirect(url_for('compare_dlp'))
+
+    records = []
+    filtered_reports = [r for r in REPORT_INDEX if r['study_description'] == study_desc]
+    for report in filtered_reports:
+        try:
+            ds = pydicom.dcmread(os.path.join(UPLOAD_FOLDER, report['save_name']), stop_before_pixels=True)
+            comments = ds.get('CommentsOnRadiationDose', '')
+            total_dlp = None
+            match = re.search(r'TotalDLP=([\d.]+)', comments)
+            if match:
+                total_dlp = float(match.group(1))
+            study_date = ds.get('StudyDate', '')
+            if study_date and len(study_date) == 8:
+                study_date = f"{study_date[:4]}-{study_date[4:6]}-{study_date[6:]}"
+        except Exception:
+            total_dlp = None
+            study_date = ''
+        records.append({
+            'Study Description': report.get('study_description', ''),
+            'Patient ID': report.get('Patient ID', 'N/A'),
+            'Filename': report.get('filename', ''),
+            'Modality': report.get('modality', ''),
+            'Total DLP': total_dlp,
+            'Study Date': study_date
+        })
+    if not records:
+        return "No data to export", 400
+    df = pd.DataFrame(records)
+    safe_study = re.sub(r'[^a-zA-Z0-9]', '_', study_desc)
+    file_path = os.path.join(STATIC_FOLDER, f'dlp_comparison_export_{safe_study}.xlsx')
+    df.to_excel(file_path, index=False)
+    return send_file(file_path, as_attachment=True)
 
 
 @app.route('/search_patient', methods=['GET', 'POST'])
@@ -340,4 +410,3 @@ import os
 port = int(os.environ.get("PORT", 8080))
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port)
-

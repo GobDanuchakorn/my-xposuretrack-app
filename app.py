@@ -1,14 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import os
-import pydicom
-from werkzeug.utils import secure_filename
 import re
 import uuid
+import shutil
+import tempfile
+import pydicom
+import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import pandas as pd
-import shutil
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from werkzeug.utils import secure_filename
 
 # ==== CONFIGURATION ====
 UPLOAD_FOLDER = 'uploads'
@@ -17,9 +18,9 @@ ALLOWED_EXTENSIONS = {'.dcm'}
 PER_PAGE = 10
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')  # Use environment variable in production
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.jinja_env.globals.update(zip=zip)  # Enable zip in Jinja2 templates
+app.jinja_env.globals.update(zip=zip)
 
 # Ensure folders exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -29,7 +30,6 @@ os.makedirs(STATIC_FOLDER, exist_ok=True)
 REPORT_INDEX = []
 
 # ==== UTILITY FUNCTIONS ====
-
 def allowed_file(filename):
     return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -48,7 +48,6 @@ def clear_folder(folder_path, extensions=None):
                     print(f'Failed to delete {file_path}. Reason: {e}')
 
 # ==== DICOM DOSE REPORT EXTRACTION ====
-
 def extract_ct_dose_info(ds):
     info = {
         'Patient ID': ds.get('PatientID', 'N/A'),
@@ -110,7 +109,6 @@ def extract_ct_dose_info(ds):
     return info, results, total_dlp
 
 # ==== ROUTES ====
-
 @app.route('/', methods=['GET', 'POST'])
 def select_modality():
     modalities = ['CT', 'DX', 'MG']
@@ -133,7 +131,7 @@ def process_files():
     modality = session.get('modality', None)
     if not modality:
         return redirect(url_for('select_modality'))
-    
+
     uploaded_files = request.files.getlist('files')
     errors = []
     for file in uploaded_files:
@@ -196,7 +194,6 @@ def list_reports():
         total=total
     )
 
-# ========== ลบไฟล์ที่อัปโหลด ==========
 @app.route('/delete_file/<report_id>', methods=['POST'])
 def delete_file(report_id):
     report = next((r for r in REPORT_INDEX if r['id'] == report_id), None)
@@ -232,8 +229,6 @@ def compare_dlp():
             'save_name': report['save_name'],
             'modality': report['modality']
         })
-        
-    # Process DLP and study date
     for record in records:
         try:
             ds = pydicom.dcmread(os.path.join(UPLOAD_FOLDER, record['save_name']), stop_before_pixels=True)
@@ -250,25 +245,13 @@ def compare_dlp():
         except Exception:
             record['Total DLP'] = None
             record['study_date'] = ''
-            
-    # Filter valid records
     records = [r for r in records if r['Study Description'] and r['Total DLP'] is not None]
-    
     if not records:
         return render_template('compare_dlp.html', plots=[], tables=[])
-
-    # Prepare data for template
     df = pd.DataFrame(records)
     plots = []
     tables = []
-    
-    # Get unique study descriptions for dropdown
-    study_descriptions = sorted({r['Study Description'] for r in records})
-    selected_study = request.args.get('study_desc')
-
-    # Group by study description
     for study, group in df.groupby('Study Description'):
-        # Generate plot
         plt.figure(figsize=(8, 5))
         plt.bar(group['Patient ID'], group['Total DLP'], color='#95b8d1')
         plt.xlabel('Patient ID')
@@ -281,12 +264,11 @@ def compare_dlp():
         plot_path = os.path.join(STATIC_FOLDER, plot_filename)
         plt.savefig(plot_path)
         plt.close()
-        
-        # Prepare data for template
         plots.append({'study': study, 'plot_url': f'static/{plot_filename}'})
         table = group[['Patient ID', 'study_date', 'Total DLP', 'report_id']].to_dict(orient='records')
         tables.append({'study': study, 'table': table})
-
+    study_descriptions = sorted({r['Study Description'] for r in records})
+    selected_study = request.args.get('study_desc')
     return render_template(
         'compare_dlp.html',
         plots=plots,
@@ -295,8 +277,6 @@ def compare_dlp():
         selected_study=selected_study
     )
 
-
-# ========== Export to Excel ==========
 @app.route('/export_excel_filtered')
 def export_excel_filtered():
     study_desc = request.args.get('study_desc')
@@ -329,12 +309,20 @@ def export_excel_filtered():
         })
     if not records:
         return "No data to export", 400
-    df = pd.DataFrame(records)
-    safe_study = re.sub(r'[^a-zA-Z0-9]', '_', study_desc)
-    file_path = os.path.join(STATIC_FOLDER, f'dlp_comparison_export_{safe_study}.xlsx')
-    df.to_excel(file_path, index=False)
-    return send_file(file_path, as_attachment=True)
 
+    df = pd.DataFrame(records)
+    
+    # Cloud-compatible file handling
+    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+        df.to_excel(tmp.name, index=False)
+        tmp.seek(0)
+        safe_study = re.sub(r'[^a-zA-Z0-9]', '_', study_desc)
+        return send_file(
+            tmp.name,
+            as_attachment=True,
+            download_name=f'dlp_export_{safe_study}.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
 
 @app.route('/search_patient', methods=['GET', 'POST'])
 def search_patient():
@@ -377,7 +365,6 @@ def compare_patient(patient_id):
                 match = re.search(r'TotalDLP=([\d.]+)', comments)
                 if match:
                     total_dlp = float(match.group(1))
-                # --- Extract and format Study Date ---
                 study_date = ds.get('StudyDate', '')
                 if study_date and len(study_date) == 8:
                     study_date = f"{study_date[:4]}-{study_date[4:6]}-{study_date[6:]}"
@@ -406,7 +393,7 @@ def compare_patient(patient_id):
     plt.close()
     return render_template('compare_patient.html', patient_id=patient_id, plot_url=f'static/{plot_filename}', studies=studies)
 
-import os
-port = int(os.environ.get("PORT", 8080))
+# ==== CLOUD DEPLOYMENT SETTINGS ====
 if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)

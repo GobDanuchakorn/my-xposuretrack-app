@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dose Report Details - {{ filename or 'N/A' }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 950px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 25px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        .page-header h1 {
+            margin: 0;
+            color: #1a4a73; /* Darker blue */
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+        }
+        .page-header h1 i {
+            margin-right: 12px;
+            font-size: 1.2em;
+        }
+        .page-header .modality-badge {
+            background-color: #007bff;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .section-title {
+            color: #1a4a73;
+            font-size: 1.5em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+        }
+        .section-title i {
+            margin-right: 10px;
+            color: #007bff;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .info-card {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+        }
+        .info-card h3 {
+            color: #007bff;
+            font-size: 1.1em;
+            margin-top: 0;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .info-card h3 i { margin-right: 8px; }
+        .info-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .info-list li {
+            margin-bottom: 8px;
+            font-size: 0.95em;
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-list li strong {
+            color: #495057;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+        .info-list li span {
+            text-align: right;
+            color: #212529;
+            word-break: break-word;
+        }
+        .info-list li .status-valid { color: #28a745; font-weight: bold; }
+        .info-list li .status-outlier { color: #dc3545; font-weight: bold; }
+        .info-list li .status-invalid { color: #ffc107; font-weight: bold; }
+        .info-list li .status-normal { color: #28a745; font-weight: bold; }
+        .info-list li .status-extreme { color: #dc3545; font-weight: bold; }
+        .info-list li .status-na { color: #6c757d; font-style: italic; }
+
+
+        .dose-table-container {
+            overflow-x: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        table.dose-data {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 600px;
+            font-size: 0.9em;
+        }
+        table.dose-data th, table.dose-data td {
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        table.dose-data th {
+            background-color: #e9ecef;
+            color: #495057;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        table.dose-data tr:nth-child(even) { background-color: #f8f9fa; }
+        table.dose-data tr:hover { background-color: #eef4ff; }
+
+        .total-dlp-badge {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin: 20px 0;
+            display: inline-block;
+            border: 1px solid #c3e6cb;
+        }
+        .total-dlp-badge i { margin-right: 8px; }
+
+        .dap-highlight {
+            font-weight: bold;
+            font-size: 1.05em;
+            color: #155724;
+        }
+
+        .nav-actions {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+        }
+        .nav-actions .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 18px;
+            font-size: 0.95em;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+            border: 1px solid transparent;
+        }
+        .nav-actions .btn i { margin-right: 8px; }
+        .nav-actions .btn-primary { background-color: #007bff; color: white; border-color: #007bff;}
+        .nav-actions .btn-primary:hover { background-color: #0056b3; border-color: #0056b3; }
+        .nav-actions .btn-secondary { background-color: #6c757d; color: white; border-color: #6c757d;}
+        .nav-actions .btn-secondary:hover { background-color: #545b62; border-color: #545b62;}
+        .nav-actions .btn-info { background-color: #17a2b8; color: white; border-color: #17a2b8;}
+        .nav-actions .btn-info:hover { background-color: #117a8b; border-color: #117a8b;}
+
+
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .error-message h3 { margin-top: 0; color: #721c24; }
+        .error-message ul { padding-left: 20px; margin-bottom: 0;}
+
+        .no-data-message {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+
+        @media (max-width: 768px) {
+            .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .info-grid { grid-template-columns: 1fr; }
+            .container { padding: 20px 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <h1><i class="fas fa-file-medical-alt"></i>Dose Report Details</h1>
+            {% if modality %}
+                <span class="modality-badge">{{ modality }}</span>
+            {% endif %}
+        </div>
+        <p style="margin-bottom: 20px;"><strong>File:</strong> {{ filename or 'N/A' }}</p>
+
+        {% if errors and errors|length > 0 %}
+            <div class="error-message">
+                <h3><i class="fas fa-exclamation-triangle"></i> Report Loading Issues:</h3>
+                <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% set has_primary_info = (modality == 'CT' and info) or (modality == 'DX' and dx_info) %}
+
+        {% if has_primary_info %}
+            <h2 class="section-title"><i class="fas fa-user-circle"></i>Patient & Study Information</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3><i class="fas fa-id-card"></i>Identification</h3>
+                    <ul class="info-list">
+                        <li><strong>Patient ID:</strong> <span>{{ (info or dx_info).get('Patient ID', 'N/A') }}</span></li>
+                        <li><strong>Study Date:</strong> <span>{{ (info or dx_info).get('Study Date', 'N/A') }}</span></li>
+                         {% if modality == 'CT' and info %}
+                        <li><strong>Patient Age:</strong> <span>{{ info.get('Patient Age', 'N/A') }}</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h3><i class="fas fa-notes-medical"></i>Study Details</h3>
+                     <ul class="info-list">
+                        {% if modality == 'CT' and info %}
+                        <li><strong>Study Desc:</strong> <span>{{ info.get('Study Description', 'N/A') }}</span></li>
+                        <li><strong>Series Desc:</strong> <span>{{ info.get('Series Description', 'N/A') }}</span></li>
+                        <li><strong>Manufacturer:</strong> <span>{{ info.get('Manufacturer', 'N/A') }}</span></li>
+                        {% elif modality == 'DX' and dx_info %}
+                        <li><strong>Body Part:</strong> <span>{{ dx_info.get('Body Part Examined', 'N/A') }}</span></li>
+                        <li><strong>View Position:</strong> <span>{{ dx_info.get('View Position', 'N/A') }}</span></li>
+                        {% else %}
+                        <li><span>No specific study details available for this modality type.</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+
+
+            {% if modality == 'CT' %}
+                <h2 class="section-title"><i class="fas fa-scanner"></i>CT Dose Details</h2>
+                {% if data and data|length > 0 %}
+                    <div class="dose-table-container">
+                        <table class="dose-data">
+                            <thead>
+                                <tr>
+                                    <th>Series</th>
+                                    <th>Scan Type</th>
+                                    <th>CTDIvol (mGy)</th>
+                                    <th>DLP (mGy·cm)</th>
+                                    <th>Phantom</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for item in data %}
+                            <tr>
+                                <td>{{ item['Series'] }}</td>
+                                <td>{{ item['Type'] }}</td>
+                                <td>{{ item['CTDIvol'] if item['CTDIvol'] is not none and item['CTDIvol']|string != '' else 'N/A' }}</td>
+                                <td>{{ item['DLP'] if item['DLP'] is not none and item['DLP']|string != '' else 'N/A' }}</td>
+                                <td>{{ item['Phantom'] or 'N/A' }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="no-data-message"><i class="fas fa-info-circle"></i> No detailed CT scan event data (ExposureDoseSequence) found in this report.</p>
+                {% endif %}
+
+                {% if total_dlp is not none %} {# total_dlp can be 0.0 which is a valid value #}
+                    <div class="total-dlp-badge">
+                        <i class="fas fa-calculator"></i>Total Exam DLP: 
+                        {% if total_dlp is number %}
+                            {{ "%.2f"|format(total_dlp) }}
+                        {% else %} 
+                            {{ total_dlp }} {# Should be 'N/A' or similar if not float from backend #}
+                        {% endif %}
+                         mGy·cm
+                    </div>
+                {% else %} {# Explicitly None means not found or parsing error #}
+                    <div class="total-dlp-badge" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
+                        <i class="fas fa-exclamation-circle"></i>Total Exam DLP: N/A (Not found or invalid in comments)
+                    </div>
+                {% endif %}
+            {% endif %}
+
+
+            {% if modality == 'DX' and dx_info %}
+                <h2 class="section-title"><i class="fas fa-x-ray"></i>Digital X-ray (DX) Dose Details</h2>
+                <div class="info-grid">
+                    <div class="info-card">
+                        <h3><i class="fas fa-radiation"></i>Exposure & Dose</h3>
+                        <ul class="info-list">
+                            <li><strong>kVp:</strong> <span>{{ dx_info.get('kVp', 'N/A') }}</span></li>
+                            <li><strong>Exposure (mAs):</strong> <span>{{ dx_info.get('Exposure (mAs)', 'N/A') }}</span></li>
+                            <li><strong>Entrance Dose:</strong> <span>{{ dx_info.get('Entrance Dose (mGy)', 'N/A') }}{% if dx_info.get('Entrance Dose (mGy)', 'N/A')|string|lower != 'n/a' and not dx_info.get('Entrance Dose (mGy)', '').lower().startswith('n/a (') %} mGy{% endif %}</span></li>
+                            <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
+                            <li class="dap-highlight"><strong>DAP:</strong> <span>{{ dx_info.get('DAP (µGy·m²)', 'N/A') }}{% if dx_info.get('DAP (µGy·m²)', 'N/A')|string|lower != 'n/a' and not dx_info.get('DAP (µGy·m²)', '').lower().startswith('n/a (') %} µGy·m²{% endif %}</span></li>
+                        </ul>
+                    </div>
+                    <div class="info-card">
+                        <h3><i class="fas fa-ruler-combined"></i>Geometric Parameters</h3>
+                        <ul class="info-list">
+                            <li><strong>SID:</strong> <span>{{ dx_info.get('SID (mm)', 'N/A') }}{% if dx_info.get('SID (mm)', 'N/A')|string|lower != 'n/a' and not dx_info.get('SID (mm)', '').lower().startswith('n/a (') %} mm{% endif %}</span></li>
+                            <li><strong>Filter Type:</strong> <span>{{ dx_info.get('Filter Type', 'N/A') }}</span></li>
+                            <li><strong>Grid:</strong> <span>{{ dx_info.get('Grid', 'N/A') }}</span></li>
+                            <li><strong>Focal Spot:</strong> <span>{{ dx_info.get('Focal Spot (mm)', 'N/A') }}{% if dx_info.get('Focal Spot (mm)', 'N/A')|string|lower != 'n/a' and not dx_info.get('Focal Spot (mm)', '').lower().startswith('n/a (') %} mm{% endif %}</span></li>
+                        </ul>
+                    </div>
+                    <div class="info-card">
+                        <h3><i class="fas fa-check-double"></i>Parameter Validation</h3>
+                        <ul class="info-list">
+                            <li><strong>SID Status:</strong>
+                                {% set sid_status = dx_info.get('SID Status', 'N/A') %}
+                                <span class="status-{{ sid_status.split(' ')[0]|lower if sid_status and sid_status != 'N/A' else 'na' }}">
+                                    {{ sid_status }}
+                                </span>
+                            </li>
+                            <li><strong>Exposure Status:</strong>
+                                 {% set exp_status = dx_info.get('Exposure Status', 'N/A') %}
+                                 <span class="status-{{ exp_status.split(' ')[0]|lower if exp_status and exp_status != 'N/A' else 'na' }}">
+                                    {{ exp_status }}
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+        {% elif not errors %} 
+            <div class="no-data-message">
+                <p><i class="fas fa-info-circle"></i> Detailed information could not be fully extracted for this report, or the report is empty/invalid.</p>
+                <p>Please check the file or try re-uploading. If the issue persists, the DICOM file might be missing required dose information fields or could not be read.</p>
+            </div>
+        {% endif %}
+
+
+        <div class="nav-actions">
+            <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Reports</a>
+            <a href="{{ url_for('search_patient') }}" class="btn btn-info"><i class="fas fa-user-magnifying-glass"></i> Patient Search</a>
+            <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload More</a>
+            <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home (Select Modality)</a>
+        </div>
+    </div>
+</body>
+</html>

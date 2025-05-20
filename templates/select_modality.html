@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Select Imaging Modality - XposureTrack{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles specific to select_modality.html */
+    .modality-selection-container {
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 30px 35px;
+        text-align: center;
+    }
+
+    .modality-selection-container h1.page-title {
+        color: #1a4a73;
+        font-size: 2em;
+        margin-top: 0;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .modality-selection-container h1.page-title i { /* Icon for the main page title */
+        margin-right: 10px;
+    }
+
+    .modality-selection-container .hint {
+        color: #555;
+        font-size: 1.05em;
+        margin-bottom: 35px;
+        line-height: 1.6;
+    }
+
+    .modality-options {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 25px;
+    }
+
+    .modality-card-button {
+        background-color: #fff;
+        border: 2px solid #007bff;
+        color: #007bff;
+        border-radius: 12px;
+        padding: 25px 20px;
+        min-width: 180px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column; /* Keep column for potential future icon re-add or description */
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+    }
+
+    .modality-card-button:hover,
+    .modality-card-button:focus {
+        background-color: #007bff;
+        color: #fff;
+        transform: translateY(-5px) scale(1.03);
+        box-shadow: 0 8px 16px rgba(0,123,255,0.25);
+        outline: none;
+    }
+    
+    /* .modality-icon styling can be removed if no icons are used on cards at all, 
+       or kept if you plan to add different ones later.
+       If kept, ensure its margin doesn't create unwanted space if no icon is present.
+    .modality-icon {
+        font-size: 3em; 
+        margin-bottom: 15px; 
+        transition: color 0.3s ease;
+    }
+    */
+
+    .modality-name {
+        font-size: 1.35em; /* Make name slightly larger if it's the main element */
+        font-weight: 600;
+        /* If no icon, margin-top might be needed if .modality-icon had margin-bottom */
+        /* margin-top: 15px; */ /* Uncomment if needed after removing icon span */
+    }
+    
+    .modality-form {
+        width: 100%;
+    }
+
+    @media (max-width: 600px) {
+        .modality-selection-container {
+            padding: 20px 15px;
+            margin-top: 20px;
+        }
+        .modality-selection-container h1.page-title {
+            font-size: 1.6em;
+        }
+        .modality-options {
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .modality-card-button {
+            width: 90%;
+            max-width: 300px;
+            min-width: initial;
+            padding: 20px;
+        }
+        /* .modality-icon {
+            font-size: 2.5em;
+        } */
+        .modality-name {
+            font-size: 1.2em; /* Adjust if needed */
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container modality-selection-container">
+    <h1 class="page-title"><i class="fas fa-tasks"></i>Select Imaging Modality</h1> {# Changed main page icon #}
+    <div class="hint">Please choose the type of study you wish to analyze. <br>Your selection will tailor the subsequent upload and analysis options.</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <ul class="flash-messages" style="text-align: left; max-width: 100%; margin-bottom: 20px;">
+            {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="post" class="modality-form">
+        <div class="modality-options">
+            {% for m in modalities %}
+                <button type="submit" name="modality" value="{{ m }}" class="modality-card-button">
+                    {# ICON SPAN REMOVED FROM HERE #}
+                    <span class="modality-name">{{ m }}</span>
+                </button>
+            {% endfor %}
+        </div>
+    </form>
+</div>
+{% endblock %}

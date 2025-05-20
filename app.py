@@ -132,17 +132,18 @@ def extract_dx_dose_info(ds):
             info[display_name] = value_str
             
     dap_val_str = get_clean_value(ds, (0x0018, 0x115E), 'N/A (0018,115E)')
+    info['DAP (dGy·cm²)'] = 'N/A (0018,115E)' # Default for the original unit display
+    info['DAP (mGy·cm²)'] = 'N/A (0018,115E)' # Default for the new target unit display
+
     if not dap_val_str.lower().startswith('n/a'):
         try:
             dap_dgycm2 = float(dap_val_str)
-            info['DAP (dGy·cm²)'] = f"{dap_dgycm2:.2f}"
-            info['DAP (µGy·m²)'] = f"{(dap_dgycm2 * 10):.2f}"
+            info['DAP (dGy·cm²)'] = f"{dap_dgycm2:.2f}" # Display original unit value
+            # Convert dGy·cm² to mGy·cm² (multiply by 100)
+            info['DAP (mGy·cm²)'] = f"{(dap_dgycm2 * 100):.2f}" 
         except ValueError:
-            info['DAP (dGy·cm²)'] = 'Invalid (0018,115E)'
-            info['DAP (µGy·m²)'] = 'Invalid (0018,115E)'
-    else:
-        info['DAP (dGy·cm²)'] = dap_val_str
-        info['DAP (µGy·m²)'] = dap_val_str
+            info['DAP (dGy·cm²)'] = f"Invalid value: {dap_val_str}"
+            info['DAP (mGy·cm²)'] = f"Invalid value: {dap_val_str}"
 
     entrance_dose_str = get_clean_value(ds, (0x0040, 0x8302), 'N/A (0040,8302)')
     if not entrance_dose_str.lower().startswith('n/a'):
@@ -373,7 +374,7 @@ def process_files():
                     'view_position': main_info.get('View Position', 'N/A'),
                     'exposure': main_info.get('Exposure (mAs)', 'N/A'),
                     'kvp': main_info.get('kVp', 'N/A'),
-                    'dap_value_ugy_m2': main_info.get('DAP (µGy·m²)', 'N/A') 
+                    'dap_value_mgy_cm2': dx_info_summary.get('DAP (mGy·cm²)', 'N/A')
                 })
             
             REPORT_INDEX.append(report_data)
@@ -769,7 +770,7 @@ def compare_dap():
         return render_template('compare_dap.html', plots=[], tables=[], body_parts_examined=[], selected_body_part=None, current_modality='DX')
 
     for report_meta in dx_reports:
-        dap_str = report_meta.get('dap_value_ugy_m2', 'N/A')
+        dap_str = report_meta.get('dap_value_mgy_cm2', 'N/A')
         dap_value_num = None
 
         if dap_str != 'N/A' and not str(dap_str).lower().startswith('n/a'):
@@ -786,7 +787,7 @@ def compare_dap():
                 'Patient ID': report_meta.get('Patient ID', 'N/A'),
                 'report_id': report_meta['id'],
                 'filename': report_meta['filename'],
-                'DAP (µGy·m²)': dap_value_num,
+                'DAP (mGy·cm²)': dap_value_num,
                 'study_date': report_meta.get('Study Date', '') # Assumed to be formatted
             })
 
@@ -796,7 +797,7 @@ def compare_dap():
 
     df_all_exams = pd.DataFrame(records) # DataFrame with all individual valid exams
     # Ensure DAP column is numeric for aggregation, coercing errors
-    df_all_exams['DAP (µGy·m²)'] = pd.to_numeric(df_all_exams['DAP (µGy·m²)'], errors='coerce')
+    df_all_exams['DAP (mGy·cm²)'] = pd.to_numeric(df_all_exams['DAP (mGy·cm²)'], errors='coerce')
     df_all_exams.dropna(subset=['DAP (µGy·m²)'], inplace=True) # Remove rows where DAP is not numeric
 
     if df_all_exams.empty:
@@ -830,22 +831,22 @@ def compare_dap():
 
     # Group by Body Part for creating separate charts/tables
     for body_part_group, group_of_exams in df_to_process.groupby('Body Part Examined'):
-        if group_of_exams.empty or group_of_exams['DAP (µGy·m²)'].isnull().all(): continue
+        if group_of_exams.empty or group_of_exams['DAP (mGy·cm²)'].isnull().all(): continue
 
         # ---- SOLUTION 2: Aggregate DAP per Patient ID for this Body Part Group ----
         # You can choose other aggregations like .max(), .sum(), .count()
         # .reset_index() converts the grouped Series back to a DataFrame
-        patient_aggregated_dap = group_of_exams.groupby('Patient ID')['DAP (µGy·m²)'].mean().reset_index()
+        patient_aggregated_dap = group_of_exams.groupby('Patient ID')['DAP (mGy·cm²)'].mean().reset_index()
         aggregation_method_label = "Average" # Change if you use .max(), .sum(), etc.
 
         if patient_aggregated_dap.empty:
             continue # Skip if no data after aggregation for this group
 
         plt.figure(figsize=(max(8, len(patient_aggregated_dap['Patient ID']) * 0.5 + 2), 6.5))
-        plt.bar(patient_aggregated_dap['Patient ID'], patient_aggregated_dap['DAP (µGy·m²)'], color='#2a9d8f', width=0.6)
+        plt.bar(patient_aggregated_dap['Patient ID'], patient_aggregated_dap['DAP (mGy·cm²)'], color='#2a9d8f', width=0.6)
         
         plt.xlabel('Patient ID', fontsize=12)
-        plt.ylabel(f'{aggregation_method_label} DAP (µGy·m²)', fontsize=12) # Updated Y-axis label
+        plt.ylabel(f'{aggregation_method_label} DAP (mGy·cm²)', fontsize=12) # Updated Y-axis label
         plt.title(f'{aggregation_method_label} DAP for {body_part_group}', fontsize=14, fontweight='bold') # Updated title
         plt.xticks(rotation=45, ha="right", fontsize=10)
         plt.yticks(fontsize=10)
@@ -870,7 +871,7 @@ def compare_dap():
         
         # The table data will still show ALL individual exams for this body_part_group
         # The plot shows the aggregated summary, the table shows the detail.
-        table_data = group_of_exams[['Patient ID', 'study_date', 'DAP (µGy·m²)', 'report_id', 'filename']].sort_values(by=['Patient ID', 'study_date']).to_dict(orient='records')
+        table_data = group_of_exams[['Patient ID', 'study_date', 'DAP (mGy·cm²)', 'report_id', 'filename']].sort_values(by=['Patient ID', 'study_date']).to_dict(orient='records')
         tables.append({'body_part': body_part_group, 'table': table_data})
         
     return render_template(
@@ -903,7 +904,7 @@ def export_excel_dx_dap_filtered():
         return redirect(url_for('compare_dap'))
         
     for report_meta in dx_reports_filtered:
-        dap_str = report_meta.get('dap_value_ugy_m2', 'N/A')
+        dap_str = report_meta.get('dap_value_mgy_cm2', 'N/A')
         dap_value_num = None
         if dap_str != 'N/A' and not str(dap_str).lower().startswith('n/a'):
             try:
@@ -917,7 +918,7 @@ def export_excel_dx_dap_filtered():
             'Patient ID': report_meta.get('Patient ID', 'N/A'),
             'Filename': report_meta.get('filename', ''),
             'Modality': report_meta.get('modality', ''),
-            'DAP (µGy·m²)': dap_value_num if dap_value_num is not None else 'N/A',
+            'DAP (mGy·cm²)': dap_value_num if dap_value_num is not None else 'N/A',
             'Study Date': report_meta.get('Study Date', '')
         })
             
@@ -993,7 +994,8 @@ def search_patient():
                 
                 elif current_modality == 'DX':
                     entry['body_part'] = report_meta.get('body_part', 'N/A')
-                    entry['dap_value'] = report_meta.get('dap_value_ugy_m2', 'N/A')
+                    entry['dap_value_label'] = 'DAP (mGy·cm²)'
+                    entry['dap_value'] = report_meta.get('dap_value_mgy_cm2', 'N/A')
                 
                 results.append(entry)
         elif request.method == 'POST' and not patient_id_search: # Submitted empty form
@@ -1054,9 +1056,9 @@ def compare_patient(patient_id):
         
         elif current_modality == 'DX':
             entry['body_part'] = report_meta.get('body_part', 'N/A')
-            value_axis_label = 'DAP (µGy·m²)'
+            value_axis_label = 'DAP (mGy·cm²)'
             entry['group_label'] = f"{entry['body_part'] or 'N/A'} ({entry['study_date']})"
-            dap_str = report_meta.get('dap_value_ugy_m2', 'N/A')
+            dap_str = report_meta.get('dap_value_mgy_cm2', 'N/A')
             if dap_str != 'N/A' and not str(dap_str).lower().startswith('n/a'):
                 try: numeric_value_for_plot = float(dap_str)
                 except ValueError: pass

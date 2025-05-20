@@ -335,7 +335,7 @@
                             <li><strong>Exposure (mAs):</strong> <span>{{ dx_info.get('Exposure (mAs)', 'N/A') }}</span></li>
                             <li><strong>Entrance Dose:</strong> <span>{{ dx_info.get('Entrance Dose (mGy)', 'N/A') }}{% if dx_info.get('Entrance Dose (mGy)', 'N/A')|string|lower != 'n/a' and not dx_info.get('Entrance Dose (mGy)', '').lower().startswith('n/a (') %} mGy{% endif %}</span></li>
                             <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
-                            <li class="dap-highlight"><strong>DAP:</strong> <span>{{ dx_info.get('DAP (µGy·m²)', 'N/A') }}{% if dx_info.get('DAP (µGy·m²)', 'N/A')|string|lower != 'n/a' and not dx_info.get('DAP (µGy·m²)', '').lower().startswith('n/a (') %} µGy·m²{% endif %}</span></li>
+                            <li class="dap-highlight"><strong>DAP:</strong> <span>{{ dx_info.get('DAP (mGy·cm²)', 'N/A') }}{% if dx_info.get('DAP (mGy·cm²)', 'N/A')|string|lower != 'n/a' and not dx_info.get('DAP (mGy·cm²)', '').lower().startswith('n/a (') %} mGy·cm²{% endif %}</span></li>
                         </ul>
                     </div>
                     <div class="info-card">

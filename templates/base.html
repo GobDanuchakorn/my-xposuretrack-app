@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}XposureTrack Dose Monitoring{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    {# Link to your main.css if you create one in static/css/ #}
+    {# <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}"> #}
+    <style>
+        /* Global Resets and Body Styling */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5; /* Light grey background for the whole page */
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            font-size: 16px; /* Base font size */
+            line-height: 1.6;
+        }
+
+        /* Header Styling */
+        header.app-header {
+            background-color: #1a4a73; /* Primary dark blue */
+            color: white;
+            padding: 1rem 1.5rem; /* Use rem for scalable padding */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: sticky; /* Make header sticky */
+            top: 0;
+            z-index: 1000; /* Ensure header is above other content */
+        }
+        header.app-header .header-container {
+            max-width: 1100px; /* Max width for header content */
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        header.app-header h1.app-title {
+            margin: 0;
+            font-size: 1.8rem; /* Responsive font size */
+            font-weight: 600;
+        }
+        header.app-header h1.app-title a {
+            color: white;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        header.app-header h1.app-title a:hover {
+            color: #cce5ff; /* Lighter blue for hover */
+        }
+        header.app-header h1.app-title i {
+            margin-right: 0.5em; /* Space between icon and text */
+        }
+
+        /* Navigation Styling */
+        nav.main-nav {
+            margin-top: 0.5rem; /* Spacing if title and nav wrap */
+        }
+        nav.main-nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap; /* Allow nav items to wrap */
+            gap: 0.5rem; /* Spacing between nav items */
+        }
+        nav.main-nav ul li {
+            margin: 0;
+        }
+        nav.main-nav ul li a {
+            color: #e0e0e0; /* Lighter color for nav links */
+            text-decoration: none;
+            padding: 0.6rem 0.9rem; /* Padding for clickable area */
+            border-radius: 5px;
+            transition: background-color 0.2s ease, color 0.2s ease;
+            font-size: 0.9rem;
+            display: inline-flex; /* Align icon and text */
+            align-items: center;
+        }
+        nav.main-nav ul li a:hover,
+        nav.main-nav ul li a.active { /* Style for active link if you implement it */
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        nav.main-nav ul li a i {
+            margin-right: 0.4em;
+        }
+
+        /* Main Content Area */
+        main.main-content {
+            flex-grow: 1;
+            padding: 1.5rem; /* Consistent padding around content */
+            width: 100%;
+        }
+        /* Container within main-content (used by other pages) */
+        .container {
+            max-width: 1100px; /* Default max-width for content containers */
+            margin: 0 auto; /* Center containers */
+            background: #fff;
+            padding: 25px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+
+        /* Footer Styling */
+        footer.app-footer {
+            background-color: #343a40; /* Dark footer background */
+            color: #adb5bd; /* Light grey text */
+            text-align: center;
+            padding: 1.5rem 1rem;
+            margin-top: auto; /* Pushes footer to bottom */
+            font-size: 0.85rem;
+        }
+        footer.app-footer p {
+            margin: 0;
+        }
+
+        /* Flash Messages Styling */
+        ul.flash-messages {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 1.5rem 0; /* Standard margin */
+            max-width: 1100px; /* Align with container */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        ul.flash-messages li {
+            padding: 0.8rem 1.2rem;
+            margin-bottom: 0.8rem;
+            border-radius: 6px;
+            font-size: 0.95em;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+        }
+        ul.flash-messages li i {
+            margin-right: 0.7rem;
+            font-size: 1.1em;
+        }
+        ul.flash-messages .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb;}
+        ul.flash-messages .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb;}
+        ul.flash-messages .info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb;}
+        ul.flash-messages .warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba;}
+
+        /* Responsive adjustments for header/nav */
+        @media (max-width: 768px) {
+            header.app-header .header-container {
+                flex-direction: column;
+                align-items: center; /* Center title and nav when stacked */
+            }
+            nav.main-nav {
+                margin-top: 0.8rem;
+                width: 100%; /* Make nav take full width */
+            }
+            nav.main-nav ul {
+                justify-content: center; /* Center nav items */
+                gap: 0.3rem;
+            }
+            nav.main-nav ul li a {
+                padding: 0.5rem 0.7rem;
+                font-size: 0.85rem;
+            }
+            main.main-content {
+                padding: 1rem;
+            }
+        }
+
+    </style>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <h1 class="app-title">
+                <a href="{{ url_for('select_modality') }}"><i class="fas fa-radiation-alt"></i> XposureTrack</a>
+            </h1>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="{{ url_for('select_modality') }}"><i class="fas fa-home"></i> Home</a></li>
+                    {% if session.modality %}
+                        <li><a href="{{ url_for('index') }}"><i class="fas fa-upload"></i> Upload {{ session.modality }}</a></li>
+                        <li><a href="{{ url_for('list_reports') }}"><i class="fas fa-list-alt"></i> View Reports</a></li>
+                        <li><a href="{{ url_for('search_patient') }}"><i class="fas fa-user-magnifying-glass"></i> Patient Search</a></li>
+                        {% if session.modality == 'CT' %}
+                            <li><a href="{{ url_for('compare_dlp') }}"><i class="fas fa-chart-line"></i> CT Compare</a></li>
+                        {% elif session.modality == 'DX' %}
+                            <li><a href="{{ url_for('compare_dap') }}"><i class="fas fa-chart-bar"></i> DX Compare</a></li>
+                        {% endif %}
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <ul class="flash-messages">
+                {% for category, message in messages %}
+                <li class="{{ category }}">
+                    {% if category == 'error' %}<i class="fas fa-times-circle"></i>
+                    {% elif category == 'success' %}<i class="fas fa-check-circle"></i>
+                    {% elif category == 'warning' %}<i class="fas fa-exclamation-triangle"></i>
+                    {% elif category == 'info' %}<i class="fas fa-info-circle"></i>
+                    {% endif %}
+                    {{ message }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %} {# Page-specific content will be injected here #}
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; {{ current_year }} XposureTrack App. All rights reserved.</p>
+    </footer>
+
+    {# Optional: Page-specific JavaScript files can be added via scripts_extra block #}
+    {% block scripts_extra %}{% endblock %}
+</body>
+</html>

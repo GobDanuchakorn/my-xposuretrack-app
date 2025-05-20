@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}Compare CT DLP by Study Description{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f0f2f5;
+        margin: 0;
+        padding: 20px;
+        color: #333;
+    }
+    .container {
+        max-width: 1100px; /* Kept existing max-width */
+        margin: 20px auto;
+        background: #fff;
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    h1.page-title {
+        color: #1a4a73;
+        font-size: 1.8em;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 15px;
+        margin-top: 0;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+    }
+    h1.page-title i {
+        margin-right: 12px;
+        font-size: 1.2em;
+    }
+
+    .filter-export-section {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        border: 1px solid #dee2e6;
+    }
+    .filter-export-form, .client-filter-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: center;
+        margin-bottom: 15px; /* Space between server filter/export and client filter */
+    }
+    .filter-export-form label, .client-filter-form label {
+        font-weight: 600;
+        color: #495057;
+        margin-right: 5px;
+    }
+    .filter-export-form .form-select, .client-filter-form .form-control {
+        padding: 0.475rem 0.75rem; /* Slightly adjusted padding */
+        font-size: 0.95rem;
+        border-radius: 0.25rem;
+        border: 1px solid #ced4da;
+        flex-grow: 1;
+        min-width: 200px;
+    }
+    .filter-export-form .btn {
+        padding: 0.475rem 0.85rem;
+        font-size: 0.95rem;
+    }
+    .btn { /* General button styling if not overridden */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 6px;
+        transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    .btn i { margin-right: 6px; }
+    .btn-primary { background-color: #007bff; border-color: #007bff; color: white;}
+    .btn-primary:hover { background-color: #0056b3; border-color: #0056b3;}
+    .btn-success { background-color: #28a745; border-color: #28a745; color: white;}
+    .btn-success:hover { background-color: #1e7e34; border-color: #1e7e34;}
+    .btn-secondary { background-color: #6c757d; border-color: #6c757d; color: white; }
+    .btn-secondary:hover { background-color: #545b62; border-color: #545b62; }
+    .btn-outline-info { color: #007bff; border-color: #007bff; background-color: transparent; }
+    .btn-outline-info:hover { background-color: #007bff; color: white; }
+
+
+    .study-section {
+        background: #fff;
+        border: 1px solid #e3e3e3;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        margin-bottom: 40px; /* Increased spacing between study sections */
+        padding: 25px;
+    }
+    .study-section h2 {
+        color: #1a4a73;
+        font-size: 1.5em;
+        margin-top: 0;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .study-section h3 { /* For "Data Table" heading */
+        color: #007bff;
+        font-size: 1.2em;
+        margin-top: 25px;
+        margin-bottom: 10px;
+    }
+    .plot-container {
+        text-align: center; /* Center the image */
+        margin-bottom: 25px;
+    }
+    .plot-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .table-responsive { overflow-x: auto; }
+    table.data-table {
+        width: 100%;
+        min-width: 600px;
+        border-collapse: collapse;
+        font-size: 0.9em;
+    }
+    table.data-table th, table.data-table td {
+        padding: 10px 12px;
+        text-align: left; /* Align text to left for better readability */
+        border: 1px solid #e0e0e0; /* Slightly lighter border */
+        vertical-align: middle;
+    }
+    table.data-table th {
+        background-color: #e9ecef; /* Consistent header background */
+        color: #495057;
+        font-weight: 600;
+        position: sticky; top: 0; z-index: 1; /* Sticky header for scrolling tables */
+    }
+    table.data-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
+    table.data-table tbody tr:hover { background-color: #eef4ff; }
+    table.data-table td a { color: #007bff; font-weight: 500; }
+    table.data-table td a:hover { text-decoration: underline; }
+    /* Center align numeric data if desired */
+    table.data-table td:nth-child(3) { text-align: right; } /* Assuming Total DLP is 3rd column */
+
+    .nav-actions {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center; /* Center nav buttons */
+    }
+    
+    .no-data-info {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 15px 20px;
+        border: 1px solid #ffeeba;
+        border-radius: 8px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .no-data-info i { margin-right: 8px;}
+
+    /* Alert/Flash Messages from base.html or can be defined here if not extending */
+    .alert { position: relative; padding: 1rem 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: 0.25rem; }
+    .alert-dismissible .btn-close { position: absolute; top: 0; right: 0; z-index: 2; padding: 1.25rem 1rem; background: none; border: 0; }
+    .btn-close { box-sizing: content-box; width: 1em; height: 1em; padding: 0.25em 0.25em; color: #000;  border: 0; border-radius: 0.25rem; opacity: 0.5; }
+    .btn-close:hover { color: #000; text-decoration: none; opacity: 0.75; }
+    .alert-error, .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb;}
+    .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb;}
+    .alert-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba;}
+    .alert-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb;}
+
+
+    @media (max-width: 768px) {
+        .container { padding: 20px 15px; }
+        .filter-export-form, .client-filter-form { flex-direction: column; align-items: stretch; }
+        .filter-export-form .form-select, .filter-export-form .btn,
+        .client-filter-form .form-control, .client-filter-form .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title"><i class="fas fa-chart-line"></i>Total DLP Comparison by Study Description</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close">X</button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="filter-export-section">
+        {% if study_descriptions %}
+        <form action="{{ url_for('compare_dlp') }}" method="get" class="filter-export-form" id="serverFilterForm">
+            <label for="study_desc_filter_select">Filter by Study Description:</label>
+            <select name="study_desc_filter" id="study_desc_filter_select" class="form-select" onchange="document.getElementById('serverFilterForm').submit();">
+                <option value="">All Study Descriptions</option>
+                {% for study in study_descriptions %}
+                    <option value="{{ study }}" {% if study == selected_study %}selected{% endif %}>{{ study }}</option>
+                {% endfor %}
+            </select>
+            {# The submit button is removed as selection change submits the form #}
+            {# <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply Server Filter</button> #}
+            
+            {% if selected_study and (plots or tables) %} {# Show export only if a study is selected and there's data #}
+            <a href="{{ url_for('export_excel_filtered', study_desc=selected_study) }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Export '{{ selected_study }}'
+            </a>
+            {% elif not selected_study and (plots or tables) %} {# General export if no specific study selected #}
+             {# You might want a general export all, or disable export if no filter is set #}
+             {# For now, let's assume export is for filtered view #}
+            {% endif %}
+        </form>
+        {% endif %}
+
+        {# Client-side filter for currently displayed sections (if not using server-side filter) #}
+        {# This is less useful if server-side filter is primary, but keeping the input #}
+        <div class="client-filter-form" {% if selected_study %}style="display:none;"{% endif %}> {# Hide if server-side filter is active #}
+            <label for="studySearch">Client-side Filter (for current view):</label>
+            <input type="text" id="studySearch" class="form-control" onkeyup="filterStudiesClientSide()" placeholder="Type to filter displayed studies...">
+        </div>
+    </div>
+
+    {% if not plots and not tables %}
+         <div class="no-data-info">
+            <p><i class="fas fa-info-circle"></i>
+            {% if selected_study %}
+                No CT reports with DLP data found for '<strong>{{ selected_study }}</strong>'.
+            {% elif study_descriptions %}
+                No CT reports with DLP data found for comparison.
+            {% else %}
+                No CT reports uploaded yet, or none contain Study Descriptions for comparison.
+            {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    <div id="studySectionsContainer">
+    {% if plots %}
+        {% for plot_item, table_item in zip(plots, tables) %} {# Assuming plots and tables are parallel and correspond #}
+        <div class="study-section" data-study-title="{{ plot_item.study|lower }}"> {# Use data attribute for JS filter #}
+            <h2>{{ plot_item.study }}</h2>
+            <div class="plot-container">
+                <img src="{{ plot_item.plot_url }}" alt="DLP Comparison Plot for {{ plot_item.study }}">
+            </div>
+            
+            {% if table_item and table_item.table %}
+            <h3><i class="fas fa-table"></i> Data Table</h3>
+            <div class="table-responsive">
+                <table class="data-table table table-striped table-hover">
+                    <thead>
+                    <tr>
+                        <th>Patient ID</th>
+                        <th>Study Date</th>
+                        <th>Filename</th>
+                        <th>Total DLP (mGy·cm)</th>
+                        <th>Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in table_item.table %}
+                    <tr>
+                        <td>{{ row['Patient ID'] }}</td>
+                        <td>{{ row['study_date'] }}</td>
+                        <td>{{ row['filename'] | truncate(30, True) }}</td>
+                        <td style="text-align: right;">
+                             {% if row['Total DLP'] is number %}
+                                {{ "%.2f"|format(row['Total DLP']) }}
+                            {% else %}
+                                {{ row['Total DLP'] or 'N/A' }}
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">
+                            <a href="{{ url_for('view_report', report_id=row.report_id) }}" class="btn btn-sm btn-outline-info" title="View full report">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+             <p>No detailed table data available for {{ plot_item.study }}.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endif %}
+    </div> {# End of studySectionsContainer #}
+    
+    <div class="nav-actions">
+        <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Reports List</a>
+        <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home / Change Modality</a>
+    </div>
+</div>
+
+<script>
+function filterStudiesClientSide() {
+    var input, filter, sectionsContainer, sections, title, i;
+    input = document.getElementById('studySearch');
+    filter = input.value.toLowerCase();
+    sectionsContainer = document.getElementById('studySectionsContainer');
+    sections = sectionsContainer.getElementsByClassName('study-section');
+
+    for (i = 0; i < sections.length; i++) {
+        // Use data-study-title attribute for filtering
+        title = sections[i].getAttribute('data-study-title'); 
+        if (title) { // Check if attribute exists
+            if (title.indexOf(filter) > -1) {
+                sections[i].style.display = "";
+            } else {
+                sections[i].style.display = "none";
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -309,7 +309,7 @@
                         <div><i class="fas fa-id-card"></i><strong>Patient ID :</strong> <span class="value">{{ report['Patient ID'] or 'N/A' }}</span></div>
                         <div><i class="fas fa-calendar-alt"></i><strong>Study Date :</strong> <span class="value">{{ report['Study Date'] or 'N/A' }}</span></div>
                         
-                        {% if current_modality == 'DX' and report.dap_value_ugy_m2 %}
+                        {% if current_modality == 'DX' and report.dap_value_mgy_cm2 %}
                             {% set dap_val_for_check = report.dap_value_ugy_m2|string|lower %}
                             {% if dap_val_for_check != 'n/a' and not dap_val_for_check.startswith('n/a (') %}
                                 <div>

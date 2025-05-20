@@ -269,9 +269,9 @@
                                 <td>{{ row['filename'] | truncate(30, True) }}</td>
                                 <td>
                                     {% if row['DAP (µGy·m²)'] is number %}
-                                        {{ "%.2f"|format(row['DAP (µGy·m²)']) }}
+                                        {{ "%.2f"|format(row['DAP (mGy·cm²)']) }}
                                     {% else %}
-                                        {{ row['DAP (µGy·m²)'] or 'N/A' }}
+                                        {{ row['DAP (mGy·cm²)'] or 'N/A' }}
                                     {% endif %}
                                 </td>
                                 <td>

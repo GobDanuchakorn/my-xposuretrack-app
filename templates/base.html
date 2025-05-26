@@ -185,16 +185,6 @@
             <nav class="main-nav">
                 <ul>
                     <li><a href="{{ url_for('select_modality') }}"><i class="fas fa-home"></i> Home</a></li>
-                    {% if session.modality %}
-                        <li><a href="{{ url_for('index') }}"><i class="fas fa-upload"></i> Upload {{ session.modality }}</a></li>
-                        <li><a href="{{ url_for('list_reports') }}"><i class="fas fa-list-alt"></i> View Reports</a></li>
-                        <li><a href="{{ url_for('search_patient') }}"><i class="fas fa-user-magnifying-glass"></i> Patient Search</a></li>
-                        {% if session.modality == 'CT' %}
-                            <li><a href="{{ url_for('compare_dlp') }}"><i class="fas fa-chart-line"></i> CT Compare</a></li>
-                        {% elif session.modality == 'DX' %}
-                            <li><a href="{{ url_for('compare_dap') }}"><i class="fas fa-chart-bar"></i> DX Compare</a></li>
-                        {% endif %}
-                    {% endif %}
                 </ul>
             </nav>
         </div>

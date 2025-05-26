@@ -21,7 +21,7 @@ from io import BytesIO # For in-memory Excel file generation
 UPLOAD_FOLDER = 'uploads'
 STATIC_FOLDER = 'static'
 ALLOWED_EXTENSIONS = {'.dcm'}
-PER_PAGE = 10 # For pagination
+PER_PAGE = 20 # For pagination
 
 # Target DAP unit and keys for DX modality
 TARGET_DAP_UNIT_LABEL_DX = 'DAP (mGy·cm²)'
@@ -31,7 +31,7 @@ DAP_CONVERSION_FACTOR_FROM_DGY_CM2_TO_MGY_CM2 = 100 # 1 dGy.cm^2 = 100 mGy.cm^2
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-please-change') # Ensure this is strong and from env in prod
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 10000 * 1024 * 1024  
+app.config['MAX_CONTENT_LENGTH'] = 100000 * 1024 * 1024  
 
 # Make zip available in Jinja2 templates if needed (though not used in current examples)
 app.jinja_env.globals.update(zip=zip)
@@ -442,7 +442,6 @@ def process_files():
 
 @app.route('/reports')
 def list_reports():
-    """Displays a paginated list of uploaded reports for the current modality."""
     modality_filter = session.get('modality')
     if not modality_filter:
         flash("Please select a modality to view reports.", "warning")
@@ -451,10 +450,18 @@ def list_reports():
     page = request.args.get('page', 1, type=int)
     search_term = request.args.get('search', '').strip().lower()
     
+    # --- ส่วนที่เพิ่มเข้ามาสำหรับการเรียงลำดับ ---
+    sort_by = request.args.get('sort_by', 'Study Date') # ค่า Default คือเรียงตาม Study Date
+    sort_order = request.args.get('sort_order', 'desc') # ค่า Default คือเรียงจากมากไปน้อย (ใหม่ไปเก่า)
+    
+    # ตรวจสอบว่า sort_order เป็นค่าที่ถูกต้อง
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'desc'
+    # --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
+
     relevant_reports = [r for r in REPORT_INDEX if r['modality'] == modality_filter]
     
     if search_term:
-        # Use a set to store ids of matching reports to avoid duplicates if a report matches multiple criteria
         matching_report_ids = set()
         temp_filtered_reports = []
         for r in relevant_reports:
@@ -478,16 +485,62 @@ def list_reports():
     else:
         final_filtered_reports = relevant_reports
         
+    # --- ส่วนที่เพิ่มเข้ามาสำหรับการเรียงลำดับข้อมูล ---
+    if final_filtered_reports: # ตรวจสอบว่ามีข้อมูลให้เรียงหรือไม่
+        # กำหนด key สำหรับการเรียงลำดับ
+        # คุณอาจจะต้องปรับ key ให้ตรงกับชื่อ key ใน REPORT_INDEX ของคุณ
+        # และจัดการกับการแปลงค่าถ้าจำเป็น (เช่น วันที่, ตัวเลข)
+        
+        # ตัวอย่างการจัดการกับการเรียงตามวันที่ (Study Date)
+        # เราจะเรียงตาม 'Raw Study Date' (YYYYMMDD) เพื่อให้เรียงถูกต้อง
+        # หรือถ้า 'Study Date' ของคุณเป็น YYYY-MM-DD ก็ใช้ได้เลย
+        
+        is_reverse = (sort_order == 'desc')
+
+        # สร้าง lambda function สำหรับการดึงค่า key โดยจัดการกับ None หรือค่าที่ไม่มีอยู่
+        def sort_key_func(report):
+            val = report.get(sort_by)
+            if val is None: # จัดการกับ None ให้น้อยที่สุดเมื่อเรียงจากน้อยไปมาก
+                return float('-inf') if sort_order == 'asc' else float('inf')
+            
+            # แปลงค่า DAP เป็นตัวเลขสำหรับการเรียงที่ถูกต้อง
+            if sort_by == TARGET_DAP_STORAGE_KEY_DX: #
+                try:
+                    return float(val)
+                except (ValueError, TypeError): # ถ้าแปลงไม่ได้ ให้ถือว่าน้อยที่สุด/มากที่สุด
+                    return float('-inf') if sort_order == 'asc' else float('inf')
+            
+            # สำหรับ Study Date ควรใช้ Raw Study Date (YYYYMMDD) เพื่อการเรียงที่ถูกต้อง
+            if sort_by == 'Study Date' and 'Raw Study Date' in report:
+                 raw_date = report.get('Raw Study Date')
+                 if raw_date and str(raw_date).isdigit() and len(str(raw_date)) == 8:
+                     return raw_date
+                 # Fallback ถ้า Raw Study Date ไม่มีรูปแบบที่คาดหวัง
+                 return val if val is not None else (float('-inf') if sort_order == 'asc' else float('inf'))
+
+            # สำหรับค่าอื่นๆ ที่เป็นสตริง
+            if isinstance(val, str):
+                return val.lower() # เรียงสตริงแบบไม่สน case
+            return val
+
+        try:
+            final_filtered_reports.sort(key=sort_key_func, reverse=is_reverse)
+        except TypeError as e:
+            flash(f"Could not sort by '{sort_by}'. Ensure data types are consistent or add specific handling. Error: {e}", "warning")
+            # อาจจะ fallback ไปเรียงแบบ default หรือไม่เรียงเลย
+            # ในที่นี้จะปล่อยให้ข้อมูลไม่ถูกเรียงถ้าเกิด TypeError
+            pass
+    # --- สิ้นสุดส่วนที่เพิ่มเข้ามา ---
+            
     total = len(final_filtered_reports)
     pages = (total + PER_PAGE - 1) // PER_PAGE if PER_PAGE > 0 else 1
     if page < 1: page = 1
-    if page > pages and pages > 0: page = pages # Correct out-of-bounds page
+    if page > pages and pages > 0: page = pages
 
     start_index = (page - 1) * PER_PAGE
     end_index = start_index + PER_PAGE
     reports_on_page = final_filtered_reports[start_index:end_index]
 
-    # For dropdowns in comparison pages (could also be passed to list_reports if needed there)
     study_descriptions_ct = []
     if modality_filter == 'CT':
         study_descriptions_ct = sorted(list(set(
@@ -505,7 +558,13 @@ def list_reports():
         'report_list.html', reports=reports_on_page, page=page, pages=pages,
         search=search_term, total=total, current_modality=modality_filter,
         study_descriptions=study_descriptions_ct,
-        body_parts_examined=body_parts_dx, TARGET_DAP_STORAGE_KEY_DX=TARGET_DAP_STORAGE_KEY_DX, TARGET_DAP_UNIT_LABEL_DX=TARGET_DAP_UNIT_LABEL_DX     # Pass specifically named var
+        body_parts_examined=body_parts_dx, 
+        TARGET_DAP_STORAGE_KEY_DX=TARGET_DAP_STORAGE_KEY_DX, #
+        PER_PAGE=PER_PAGE,
+        # --- ส่งตัวแปร sort ไปยัง template ---
+        current_sort_by=sort_by,
+        current_sort_order=sort_order
+        # --- สิ้นสุดการส่งตัวแปร ---
     )
 
 @app.route('/delete_file/<report_id>', methods=['POST'])
@@ -698,6 +757,7 @@ def compare_dlp():
     plots, tables = [], []
     study_descs_for_page = sorted(list(df_all['Study Description'].unique()))
     selected_filter = request.args.get('study_desc_filter')
+    
     df_to_plot = df_all[df_all['Study Description'] == selected_filter].copy() if selected_filter else df_all.copy()
 
     if df_to_plot.empty and selected_filter:

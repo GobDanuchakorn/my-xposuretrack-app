@@ -282,6 +282,10 @@
                             <tr>
                                 <th>Series</th>
                                 <th>Scan Type</th>
+                                <th>kVp</th>
+                                <th>mA</th>
+                                <th>Time (ms)</th>
+                                <th>Pitch</th>
                                 <th>CTDIvol (mGy)</th>
                                 <th>DLP (mGy·cm)</th>
                                 <th>Phantom</th>
@@ -292,6 +296,10 @@
                         <tr>
                             <td>{{ item['Series'] }}</td>
                             <td>{{ item['Type'] }}</td>
+                            <td>{{ item['KVP'] if item['KVP'] is not none and item['KVP']|string != '' else 'N/A' }}</td>
+                            <td>{{ item['XRayTubeCurrent'] if item['XRayTubeCurrent'] is not none and item['XRayTubeCurrent']|string != '' else 'N/A' }}</td>
+                            <td>{{ item['ExposureTime'] if item['ExposureTime'] is not none and item['ExposureTime']|string != '' else 'N/A' }}</td>
+                            <td>{{ item['SpiralPitchFactor'] if item['SpiralPitchFactor'] is not none and item['SpiralPitchFactor']|string != '' else 'N/A' }}</td>
                             <td>{{ item['CTDIvol'] if item['CTDIvol'] is not none and item['CTDIvol']|string != '' else 'N/A' }}</td>
                             <td>{{ item['DLP'] if item['DLP'] is not none and item['DLP']|string != '' else 'N/A' }}</td>
                             <td>{{ item['Phantom'] or 'N/A' }}</td>
@@ -383,8 +391,18 @@
 
     <div class="nav-actions">
         <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Reports</a>
-        <a href="{{ url_for('search_patient') }}" class="btn btn-info"><i class="fas fa-user-magnifying-glass"></i> Patient Search</a>
-        <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload More</a>
+        {% set patient_id_for_link = None %}
+        {% if modality == 'CT' and info and info.get('Patient ID') and info.get('Patient ID')|string|lower != 'n/a' %}
+            {% set patient_id_for_link = info.get('Patient ID') %}
+        {% elif modality == 'DX' and dx_info and dx_info.get('Patient ID') and dx_info.get('Patient ID')|string|lower != 'n/a' %}
+            {% set patient_id_for_link = dx_info.get('Patient ID') %}
+        {% endif %}
+
+        {% if patient_id_for_link %}
+            <a href="{{ url_for('compare_patient', patient_id=patient_id_for_link) }}" class="btn btn-primary">
+                <i class="fas fa-user-chart"></i> Compare Patient {{ patient_id_for_link }}
+            </a>
+        {% endif %}
         <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home (Select Modality)</a>
     </div>
 </div>

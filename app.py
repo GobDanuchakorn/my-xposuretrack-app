@@ -254,12 +254,10 @@ def extract_ct_dose_info(ds):
                 if hasattr(item, 'CTDIPhantomTypeCodeSequence') and item.CTDIPhantomTypeCodeSequence \
                 else 'N/A'
             
-            # More specific phantom naming
             if hasattr(item, 'CTDIPhantomTypeCodeSequence') and item.CTDIPhantomTypeCodeSequence:
                 code_val = get_clean_value(item.CTDIPhantomTypeCodeSequence[0], 'CodeValue', '')
                 if code_val in ['113690', '113701']: phantom = 'Head 16cm'
                 elif code_val in ['113691', '113702']: phantom = 'Body 32cm'
-                # else phantom remains from CodeMeaning or N/A
 
             scan_type_str = 'N/A'
             if acq_type_val:
@@ -267,7 +265,7 @@ def extract_ct_dose_info(ds):
                 if acq_type_upper == 'SEQUENCED': scan_type_str = 'Axial'
                 elif acq_type_upper == 'CONSTANT_ANGLE': scan_type_str = 'Scout/Localizer'
                 elif acq_type_upper == 'SPIRAL': scan_type_str = 'Helical'
-                else: scan_type_str = str(acq_type_val) # Use original if not recognized
+                else: scan_type_str = str(acq_type_val)
             
             ctdi_display = ''
             if ctdi_vol_val is not None:
@@ -280,11 +278,48 @@ def extract_ct_dose_info(ds):
                 try: dlp_display = round(float(dlp_for_event), 2)
                 except (ValueError, TypeError): dlp_display = str(dlp_for_event)
 
+            # --- ส่วนที่เพิ่มเข้ามา ---
+            kvp_val = getattr(item, 'KVP', None)
+            kvp_display = ''
+            if kvp_val is not None:
+                try: kvp_display = int(round(float(kvp_val)))
+                except (ValueError, TypeError): kvp_display = str(kvp_val)
+
+            # --- ส่วนที่ปรับปรุงสำหรับการอ่าน XRayTubeCurrentInuA และแปลงเป็น mA ---
+            tube_current_in_ua_val = getattr(item, 'XRayTubeCurrentInuA', None) # (0018,8151)
+            tube_current_display_ma = '' # เปลี่ยนชื่อตัวแปรเพื่อความชัดเจน
+            if tube_current_in_ua_val is not None:
+                try:
+                    # แปลงจาก µA เป็น mA (หารด้วย 1000)
+                    current_ma = float(tube_current_in_ua_val) / 1000.0
+                    tube_current_display_ma = int(round(current_ma)) # แสดงเป็น mA และปัดเป็นจำนวนเต็ม
+                except (ValueError, TypeError):
+                    tube_current_display_ma = str(tube_current_in_ua_val) # ถ้าแปลงไม่ได้ ให้แสดงค่าดิบ
+            # --- สิ้นสุดส่วนที่ปรับปรุง ---
+            
+            exposure_time_val = getattr(item, 'ExposureTime', None)
+            exposure_time_display = ''
+            if exposure_time_val is not None:
+                try: exposure_time_display = int(round(float(exposure_time_val)))
+                except (ValueError, TypeError): exposure_time_display = str(exposure_time_val)
+
+            pitch_factor_val = getattr(item, 'SpiralPitchFactor', None)
+            pitch_factor_display = ''
+            if pitch_factor_val is not None and scan_type_str == 'Helical':
+                try: pitch_factor_display = round(float(pitch_factor_val), 3)
+                except (ValueError, TypeError): pitch_factor_display = str(pitch_factor_val)
+            elif scan_type_str != 'Helical':
+                pitch_factor_display = 'N/A'
+            
             results.append({
                 'Series': idx, 'Type': scan_type_str,
                 'CTDIvol': ctdi_display if scan_type_str != 'Scout/Localizer' else '',
                 'DLP': dlp_display if scan_type_str != 'Scout/Localizer' else '',
-                'Phantom': phantom
+                'Phantom': phantom,
+                'KVP': kvp_display,
+                'XRayTubeCurrent': tube_current_display_ma,
+                'ExposureTime': exposure_time_display,
+                'SpiralPitchFactor': pitch_factor_display
             })
     return info, results, total_dlp
 
@@ -295,7 +330,7 @@ def extract_ct_dose_info(ds):
 @app.route('/', methods=['GET', 'POST'])
 def select_modality():
     """Handles modality selection and clears data if modality changes."""
-    modalities = ['CT', 'DX', 'MG'] # MG is a placeholder, no specific extraction logic
+    modalities = ['CT', 'DX'] # MG is a placeholder, no specific extraction logic
     if request.method == 'POST':
         selected_modality = request.form.get('modality')
         if selected_modality in modalities:

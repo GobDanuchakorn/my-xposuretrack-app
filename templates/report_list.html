@@ -1,0 +1,420 @@
+{% extends "base.html" %} {# This MUST be the VERY FIRST line #}
+
+{% block title %}Uploaded {{ current_modality or 'All' }} Dose Reports - Page {{ page }} of {{pages}}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+    /* Styles specific to report_list.html, assuming base.html provides global styles */
+    /* .container, h1, .sub-header, .flash-messages etc. should be styled by base.html */
+    /* If base.html does not style them, you can uncomment and adapt styles from your previous version here. */
+    
+    .top-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .nav-links { /* For patient search, compare links */
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+    .nav-links .btn, /* Using .btn for consistency with base.html button styling */
+    .nav-links .btn-like-link { 
+        font-weight: 600;
+        text-decoration: none; 
+        padding: 8px 15px;
+        border-radius: 6px;
+        transition: background-color 0.2s, color 0.2s, box-shadow 0.15s;
+        display: inline-flex;
+        align-items: center;
+    }
+    .nav-links .btn i,
+    .nav-links .btn-like-link i { margin-right: 6px; }
+
+    .upload-btn-container { /* Wrapper for the upload button form */
+        display: inline-block; /* Allows it to sit nicely with other nav-links */
+    }
+    .upload-btn { /* Style for the "Upload More" button */
+        padding: 9px 18px;
+        font-size: 0.95em;
+        font-weight: 600;
+    }
+    
+    .search-filter-section {
+        margin-bottom: 25px;
+        padding: 20px; /* Increased padding */
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6; /* Softer border */
+    }
+    .search-box {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .search-box input[type="text"].form-control, /* Using .form-control for consistency */
+    .search-box select.form-select { /* Using .form-select */
+        padding: 9px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        font-size: 0.95em;
+        flex-grow: 1;
+        min-width: 200px;
+    }
+    .search-box .btn i { margin-right: 6px; }
+
+.report-table-container {
+    margin-top: 20px;
+    background-color: #fff; /* พื้นหลังสีขาวให้ตาราง */
+    padding: 20px; /* เพิ่ม padding รอบตาราง */
+    border-radius: 8px; /* ขอบมน */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07); /* เงาเล็กน้อย */
+    overflow-x: auto; /* ทำให้ตาราง scroll แนวนอนได้ถ้าเนื้อหาเยอะ */
+}
+
+table.report-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em; /* ปรับขนาด font ในตาราง */
+}
+
+table.report-data-table th,
+table.report-data-table td {
+    padding: 10px 12px; /* ปรับ padding ของ cell */
+    text-align: left;
+    vertical-align: middle; /* จัดข้อความให้อยู่กลาง cell แนวตั้ง */
+    border-bottom: 1px solid #e0e0e0; /* เส้นคั่นบางๆ ระหว่างแถว */
+}
+
+table.report-data-table thead th {
+    background-color: #e9ecef; /* สีพื้นหลังหัวตาราง */
+    color: #495057;
+    font-weight: 600;
+    white-space: nowrap; /* ไม่ให้หัวตารางตัดคำ */
+}
+
+table.report-data-table tbody tr:hover {
+    background-color: #f1f7ff; /* สีพื้นหลังเมื่อ hover แถว */
+}
+
+.view-link-table, .delete-btn-table { /* สไตล์สำหรับปุ่มในตาราง */
+    font-size: 0.8em !important; /* ลดขนาดปุ่มลงอีก */
+    padding: 4px 8px !important; /* ลด padding ของปุ่ม */
+}
+
+.delete-btn-form-table { /* ปรับ form ของปุ่ม delete */
+    display: inline-block;
+    margin-left: 5px;
+}
+th.sortable-header a {
+    color: inherit; /* ให้สีลิงก์เหมือนข้อความปกติของ header */
+    text-decoration: none;
+    display: block; /* ทำให้คลิกได้ทั้ง cell */
+}
+th.sortable-header a:hover {
+    color: #0056b3; /* เปลี่ยนสีเมื่อ hover */
+    text-decoration: none;
+}
+th.sortable-header .fas { /* จัดตำแหน่งไอคอน */
+    margin-left: 5px;
+    font-size: 0.9em;
+}
+/* Responsive adjustments for table on smaller screens if needed */
+@media (max-width: 768px) {
+    /*
+    table.report-data-table th,
+    table.report-data-table td {
+        font-size: 0.85em; // ลดขนาด font อีกถ้าจำเป็น
+        padding: 8px 10px;
+    }
+    .report-table-container {
+        padding: 10px;
+    }
+    */
+}
+    
+    .pagination { margin: 30px 0; text-align: center; }
+    .pagination a, .pagination span {
+        margin: 0 4px; padding: 8px 14px; text-decoration: none;
+        border: 1px solid #dee2e6; color: #007bff; border-radius: 5px;
+        transition: background-color 0.2s, color 0.2s;
+    }
+    .pagination a:hover { background-color: #e9ecef; color: #0056b3; }
+    .pagination .active { background-color: #007bff; color: #fff; border-color: #007bff; pointer-events: none; }
+    .pagination .disabled { color: #6c757d; border-color: #dee2e6; pointer-events: none; }
+    
+    .comparison-links-section { margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;}
+    .comparison-links-section h3 { margin-top: 0; color: #1a4a73; display: flex; align-items: center; font-size: 1.3em;}
+    .comparison-links-section h3 i { margin-right: 10px; color: #007bff;}
+    .comparison-links-section ul { padding-left: 0; list-style: none; margin: 0; }
+    .comparison-links-section li { margin-bottom: 6px; }
+    .comparison-links-section li a { 
+        text-decoration: none; color: #007bff; font-weight: 500; display: block;
+        padding: 8px 12px; border-radius: 5px; transition: background-color 0.2s;
+    }
+    .comparison-links-section li a:hover { background-color: #e7f3ff; color: #0056b3; }
+    .comparison-links-section li a i { margin-right: 8px; }
+
+    .no-reports { 
+        color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; 
+        padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; font-size: 1.05em;
+    }
+    .no-reports i { font-size: 1.5em; display: block; margin-bottom: 10px; color: #cea002;}
+         
+    .back-to-modality-selection-container { /* New class for centering */
+        text-align: center; 
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+    }
+    /* .back-to-modality-selection styles should be inherited from base.html if defined there as .btn .btn-secondary */
+
+    @media (max-width: 768px) {
+        .report-list { grid-template-columns: 1fr; } 
+        .top-actions { flex-direction: column; align-items: stretch; }
+        .search-box { flex-direction: column; align-items: stretch; }
+        .search-box input[type="text"].form-control, 
+        .search-box select.form-select, 
+        .search-box button.btn { width: 100%; }
+        .nav-links { justify-content: center; }
+        h1 { font-size: 1.6em; } /* Handled by base.html usually */
+    }
+</style>
+{% endblock %} {# End of head_extra #}
+
+
+{% block content %}
+<div class="container">
+    {# Title and sub-header should be styled by base.html h1 and p or local h1 styling #}
+    <h1> 
+        <i class="fas fa-folder-open"></i> Uploaded {{ current_modality or 'All' }} Dose Reports
+    </h1>
+    <p class="sub-header">
+        {% if total > 0 %}
+            Currently viewing page {{ page }} of {{ pages }}. Total {{ current_modality or '' }} reports: {{ total }}
+        {% else %}
+            No {{ current_modality or '' }} reports found for this modality.
+        {% endif %}
+    </p>
+
+    {# Flash messages should be handled by base.html, so this block is removed from here.
+       If base.html doesn't have it, you can add it back or (better) add it to base.html.
+    {% with messages = get_flashed_messages(with_categories=true) %} ... {% endwith %}
+    #}
+
+    <div class="top-actions">
+        <div class="nav-links">
+            <a href="{{ url_for('search_patient') }}" class="btn btn-outline-primary"><i class="fas fa-user-magnifying-glass"></i> Patient Search ({{current_modality or 'Any'}})</a>
+            {% if current_modality == 'CT' and reports and reports|length > 0 %}
+                <a href="{{ url_for('compare_dlp') }}" class="btn btn-outline-primary"><i class="fas fa-chart-line"></i> Compare CT DLP</a>
+                <a href="{{ url_for('mean_dlp_comparison') }}" class="btn btn-outline-primary"><i class="fas fa-chart-bar"></i> CT Mean DLP</a>
+                <a href="{{ url_for('mean_ctdivol_comparison') }}" class="btn btn-outline-primary"><i class="fas fa-chart-pie"></i> CT Mean CTDIvol</a>
+            {% elif current_modality == 'DX' and reports and reports|length > 0 %}
+                <a href="{{ url_for('compare_dap') }}" class="btn btn-outline-primary"><i class="fas fa-chart-bar"></i> Compare DX DAP</a>
+            {% endif %}
+        </div>
+        <div class="upload-btn-container"> {# Wrapped form for better flex alignment if needed #}
+            <form id="uploadForm" action="{{ url_for('process_files') }}" method="post" enctype="multipart/form-data">
+                <input type="file" name="files" id="fileInput" multiple onchange="document.getElementById('uploadForm').submit();" accept=".dcm" style="display:none;">
+                <button type="button" class="btn btn-success upload-btn" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-upload"></i> Upload More {{ current_modality or '' }} Files
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="search-filter-section">
+        <form method="get" action="{{ url_for('list_reports') }}" class="search-box">
+            <input type="text" name="search" class="form-control" placeholder="Search by filename, Patient ID, Study Date (YYYY-MM-DD), or {{ 'Study Desc...' if current_modality == 'CT' else 'Body Part...' }}" value="{{ search or '' }}">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+        </form>
+    </div>
+
+{% if reports %}
+    <div class="table-responsive report-table-container"> {# เพิ่ม class report-table-container #}
+        <table class="table table-striped table-hover report-data-table"> {# เพิ่ม class report-data-table #}
+<thead>
+    <tr>
+        <th>#</th>
+        
+        {# ฟังก์ชัน Helper ใน Jinja2 เพื่อสร้างลิงก์สำหรับเรียงลำดับ #}
+        {% macro sortable_th(column_key, display_name, current_sort_by, current_sort_order, search_term, page) %}
+            {% set new_sort_order = 'asc' if current_sort_by == column_key and current_sort_order == 'desc' else 'desc' %}
+            <th class="sortable-header">
+                <a href="{{ url_for('list_reports', sort_by=column_key, sort_order=new_sort_order, search=search_term, page=1) }}">
+                    {{ display_name }}
+                    {% if current_sort_by == column_key %}
+                        {% if current_sort_order == 'asc' %}
+                            <i class="fas fa-sort-up"></i>
+                        {% else %}
+                            <i class="fas fa-sort-down"></i>
+                        {% endif %}
+                    {% else %}
+                        <i class="fas fa-sort" style="color: #ccc;"></i> {# ไอคอน default สำหรับคอลัมน์ที่ไม่ได้ถูกเรียง #}
+                    {% endif %}
+                </a>
+            </th>
+        {% endmacro %}
+
+        {% if current_modality == 'CT' %}
+            {{ sortable_th('study_description', 'Study Description', current_sort_by, current_sort_order, search, page) }}
+            {{ sortable_th('series_description', 'Series Description', current_sort_by, current_sort_order, search, page) }}
+        {% elif current_modality == 'DX' %}
+            {{ sortable_th('body_part', 'Body Part', current_sort_by, current_sort_order, search, page) }}
+            {{ sortable_th('view_position', 'View Position', current_sort_by, current_sort_order, search, page) }}
+        {% else %}
+            {{ sortable_th('filename', 'Report Title', current_sort_by, current_sort_order, search, page) }} {# Fallback #}
+        {% endif %}
+        
+        {{ sortable_th('filename', 'Filename', current_sort_by, current_sort_order, search, page) }}
+        {{ sortable_th('Patient ID', 'Patient ID', current_sort_by, current_sort_order, search, page) }}
+        {{ sortable_th('Study Date', 'Study Date', current_sort_by, current_sort_order, search, page) }} {# ควรใช้ 'Raw Study Date' ใน app.py สำหรับการเรียงจริง #}
+
+        {% if current_modality == 'DX' %}
+            {# ใช้ TARGET_DAP_STORAGE_KEY_DX สำหรับ sort_by ใน app.py #}
+            {{ sortable_th(TARGET_DAP_STORAGE_KEY_DX, 'DAP (mGy·cm²)', current_sort_by, current_sort_order, search, page) }}
+        {% endif %}
+        <th style="text-align: center;">Actions</th>
+    </tr>
+</thead>
+            <tbody>
+                {% for report in reports %}
+                <tr>
+                    <td>{{ loop.index + ( (page - 1) * PER_PAGE if page and PER_PAGE else 0 ) }}</td> {# Running number #}
+
+                    {% if current_modality == 'CT' %}
+                        <td>{{ report.study_description or 'N/A' }}</td>
+                        <td>{{ report.series_description or 'N/A' }}</td>
+                    {% elif current_modality == 'DX' %}
+                        <td>{{ report.body_part or 'N/A' }}</td>
+                        <td>{{ report.view_position or 'N/A' }}</td>
+                    {% else %}
+                         <td>{{ report.filename | truncate(30, True) }}</td> {# Fallback title #}
+                    {% endif %}
+
+                    <td>{{ report.filename | truncate(25, True) }}</td>
+                    <td>{{ report['Patient ID'] or 'N/A' }}</td>
+                    <td>{{ report['Study Date'] or 'N/A' }}</td>
+
+                    {% if current_modality == 'DX' %}
+                        <td>
+                        {% set dap_display_val = report.get(TARGET_DAP_STORAGE_KEY_DX) %}
+                        {% if dap_display_val %}
+                            {% if dap_display_val is number or (dap_display_val is string and dap_display_val.replace('.', '', 1).replace('-', '', 1).isdigit()) %}
+                                {{ "%.2f"|format(dap_display_val|float) }}
+                            {% else %}
+                                {{ dap_display_val }}
+                            {% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                        </td>
+                    {% endif %}
+
+                    <td style="text-align: center; white-space: nowrap;">
+                        <a class="btn btn-sm btn-outline-primary view-link-table" href="{{ url_for('view_report', report_id=report.id) }}" title="View report details for {{ report.filename }}">
+                            <i class="fas fa-eye"></i> View
+                        </a>
+                        <form class="delete-btn-form-table" action="{{ url_for('delete_file', report_id=report.id) }}" method="post" style="display: inline-block; margin-left: 5px;">
+                            <input type="hidden" name="page" value="{{ page }}">
+                            <input type="hidden" name="search" value="{{ search or '' }}">
+                            <button type="submit" class="btn btn-sm btn-danger delete-btn-table" title="Delete {{ report.filename }}" onclick="return confirm('Are you sure you want to delete file: {{ report.filename }}?')">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="no-reports">
+            <i class="fas fa-folder-minus"></i><br>
+            {% if search %}
+                No reports found matching your search: "<strong>{{ search }}</strong>".
+            {% else %}
+                No {{ current_modality or ''}} reports have been uploaded for this modality yet.
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="{{ url_for('list_reports', page=1, search=search) }}">&laquo; First</a>
+            <a href="{{ url_for('list_reports', page=page-1, search=search) }}">&lsaquo; Prev</a>
+        {% else %}
+            <span class="disabled">&laquo; First</span>
+            <span class="disabled">&lsaquo; Prev</span>
+        {% endif %}
+
+        {% set window = 1 %} 
+        {% set show_first_ellipsis = false %}
+        {% set show_last_ellipsis = false %}
+        {% for p in range(1, pages + 1) %}
+            {% if p == page %}
+                <span class="active">{{ p }}</span>
+            {% elif p == 1 or p == pages or (p >= page - window and p <= page + window) %}
+                <a href="{{ url_for('list_reports', page=p, search=search) }}">{{ p }}</a>
+            {% elif p < page and not show_first_ellipsis and p > 1 %}
+                {% set show_first_ellipsis = true %}<span class="disabled">&hellip;</span>
+            {% elif p > page and not show_last_ellipsis and p < pages %}
+                {% set show_last_ellipsis = true %}<span class="disabled">&hellip;</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < pages %}
+            <a href="{{ url_for('list_reports', page=page+1, search=search) }}">Next &rsaquo;</a>
+            <a href="{{ url_for('list_reports', page=pages, search=search) }}">Last &raquo;</a>
+        {% else %}
+            <span class="disabled">Next &rsaquo;</span>
+            <span class="disabled">Last &raquo;</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if (current_modality == 'CT' and study_descriptions) or (current_modality == 'DX' and body_parts_examined) %}
+    <div class="comparison-links-section">
+        <h3><i class="fas fa-link"></i> Quick Links to {{current_modality}} Comparisons</h3>
+        <ul>
+            {% if current_modality == 'CT' %}
+                {% for study in study_descriptions %}
+                <li>
+                    <a href="{{ url_for('compare_dlp', study_desc_filter=study) }}"><i class="fas fa-chart-line"></i> {{ study }}</a>
+                </li>
+                {% else %} 
+                 <li>No specific CT study types identified for quick links.</li>
+                {% endfor %}
+            {% elif current_modality == 'DX' %}
+                {% for bp in body_parts_examined %}
+                <li>
+                    <a href="{{ url_for('compare_dap', body_part_filter=bp) }}"><i class="fas fa-chart-bar"></i> {{ bp }}</a>
+                </li>
+                {% else %}
+                 <li>No specific DX body parts identified for quick links.</li>
+                {% endfor %}
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="back-to-modality-selection-container">
+        <a href="{{ url_for('select_modality') }}" class="btn btn-secondary back-to-modality-selection">
+            <i class="fas fa-arrow-left"></i> Change Modality / Back to Home
+        </a>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{# Any page-specific JavaScript for report_list.html would go here #}
+{% endblock %}
+</html>

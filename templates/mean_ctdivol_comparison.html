@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}Mean CTDIvol Comparison - XposureTrack{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+    /* Global Styles from base.html should apply */
+    /* Container styling (can be adjusted or rely on base.html) */
+    .container {
+        max-width: 950px; /* Or your preferred max-width */
+        margin: 20px auto;
+        background: #fff; /* Ensure a white background if not set by base */
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Page Title (consistent with other pages) */
+    .page-title {
+        color: #1a4a73;
+        font-size: 1.8em;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 15px;
+        margin-top: 0;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+    }
+    .page-title i {
+        margin-right: 12px;
+        font-size: 1.2em;
+    }
+
+    /* Filter Section */
+    .filter-section {
+        background-color: #f8f9fa;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        border: 1px solid #dee2e6;
+    }
+    .filter-form {
+        display: flex;
+        flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        gap: 15px;
+        align-items: center;
+    }
+    .filter-form label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0; /* Align with select if it wraps */
+    }
+    .filter-form .form-select {
+        padding: 0.475rem 0.75rem;
+        font-size: 0.95rem;
+        border-radius: 0.25rem;
+        border: 1px solid #ced4da;
+        flex-grow: 1;
+        min-width: 250px; /* Minimum width for the select dropdown */
+    }
+    .filter-form .btn-sm { /* For "Clear Filter" button */
+        font-size: 0.875em;
+        padding: 0.3rem 0.6rem;
+    }
+
+
+    /* Export Button Container */
+    .export-button-container {
+        margin-bottom: 20px;
+        text-align: right;
+    }
+    .export-button-container .btn-success { /* Specific styling for export button if needed */
+        font-weight: 600;
+    }
+
+
+    /* Chart Container */
+    .chart-container {
+        text-align: center;
+        margin-top: 20px; /* Adjusted margin */
+        margin-bottom: 30px;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        border: 1px solid #e9ecef; /* Softer border for chart container */
+    }
+    .chart-container h4 { /* Title for the chart section */
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #1a4a73;
+        font-size: 1.3em;
+    }
+    .chart-container img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+    }
+    .chart-container .no-chart-message { /* For message when chart cannot be generated */
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    /* Data Table Styling (consistent with report_list.html table) */
+    .data-table-container {
+        margin-top: 20px;
+        background-color: #fff;
+        padding: 0; /* Table itself will have padding if needed via cells */
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        border: 1px solid #e9ecef; /* Softer border */
+        overflow-x: auto;
+    }
+    table.data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+    }
+    table.data-table th,
+    table.data-table td {
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: middle;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    table.data-table td:first-child, 
+    table.data-table th:first-child {
+        padding-left: 20px; /* More padding for the first column */
+    }
+    table.data-table td:last-child, 
+    table.data-table th:last-child {
+        padding-right: 20px; /* More padding for the last column */
+    }
+    table.data-table thead th {
+        background-color: #e9ecef;
+        color: #495057;
+        font-weight: 600;
+        white-space: nowrap;
+        border-top: none; /* Remove top border if container has border */
+        border-bottom-width: 2px; /* Thicker bottom border for header */
+    }
+    table.data-table tbody tr:hover {
+        background-color: #f1f7ff;
+    }
+    table.data-table td[style*="text-align: right"] { /* Ensure right-aligned numbers are styled */
+        font-family: 'Consolas', 'Monaco', monospace; /* Monospaced font for numbers */
+    }
+
+    /* Sortable Header Links (consistent with other sortable tables) */
+    th.sortable-header a {
+        color: inherit;
+        text-decoration: none;
+        display: inline-block; /* Changed from block to allow text-align from th */
+        position: relative; /* For icon positioning if needed */
+    }
+    th.sortable-header a:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+    th.sortable-header .fas {
+        margin-left: 6px;
+        font-size: 0.9em;
+        color: #007bff; /* Default sort icon color */
+    }
+    th.sortable-header .fa-sort {
+        color: #adb5bd; /* Lighter color for the default sort icon */
+    }
+
+
+    /* No Data Info (consistent styling) */
+    .no-data-info {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 20px; /* Increased padding */
+        border: 1px solid #ffeeba;
+        border-radius: 8px;
+        text-align: center;
+        margin: 25px 0; /* Adjusted margin */
+        font-size: 1em;
+    }
+    .no-data-info i {
+        margin-right: 8px;
+        font-size: 1.2em; /* Slightly larger icon */
+    }
+
+    /* Navigation Actions (consistent styling from base.html or other pages) */
+    .nav-actions {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+    }
+    .nav-actions .btn { /* Ensure .btn styles are applied if not fully inherited */
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 18px;
+        font-size: 0.95em;
+        font-weight: 600; /* Ensure consistent button font weight */
+        text-decoration: none;
+        border-radius: 6px;
+        transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+        border: 1px solid transparent;
+    }
+    .nav-actions .btn i { margin-right: 8px; }
+    /* Specific button colors should be handled by classes like .btn-primary, .btn-secondary, .btn-info */
+
+    @media (max-width: 768px) {
+        .filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .filter-form .form-select, .filter-form .btn {
+            width: 100%;
+        }
+        .export-button-container {
+            text-align: center; /* Center export button on small screens */
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title"><i class="fas fa-chart-pie"></i>Mean CTDIvol per Study Description</h1>
+
+    {# Flash messages are handled by base.html #}
+
+    {% if study_descriptions %} {# Show filter only if there are study descriptions to filter by #}
+    <div class="filter-section">
+        <form method="get" action="{{ url_for('mean_ctdivol_comparison') }}" class="filter-form" id="meanCtdiFilterForm">
+            <label for="study_desc_filter_select">Filter by Study Description:</label>
+            <select name="study_desc_filter" id="study_desc_filter_select" class="form-select" onchange="document.getElementById('meanCtdiFilterForm').submit();">
+                <option value="">All Study Descriptions</option>
+                {% for study_desc in study_descriptions %}
+                    <option value="{{ study_desc }}" {% if study_desc == selected_study %}selected{% endif %}>{{ study_desc }}</option>
+                {% endfor %}
+            </select>
+            {% if selected_study %}
+                <a href="{{ url_for('mean_ctdivol_comparison') }}" class="btn btn-sm btn-outline-secondary">Clear Filter</a>
+            {% endif %}
+        </form>
+    </div>
+    {% endif %}
+
+    {% if study_data_with_means %}
+    <div class="export-button-container">
+        <a href="{{ url_for('export_mean_ctdivol_excel', study_desc_filter=(selected_study if selected_study else '')) }}" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> Export to Excel
+            {% if selected_study %} (Filtered: {{ selected_study }}) {% endif %}
+        </a>
+    </div>
+    {% endif %}
+
+    {% if plot_url_mean_ctdivol %}
+    <div class="chart-container">
+        <h4>Mean CTDIvol Comparison</h4>
+        <img src="{{ plot_url_mean_ctdivol }}" alt="Mean CTDIvol Comparison Chart for {{ selected_study or 'All Studies' }}">
+    </div>
+    {% elif study_data_with_means and not plot_url_mean_ctdivol %} {# Only show this if there was data but no plot #}
+    <div class="chart-container">
+        <p class="no-chart-message"><em>Chart could not be generated (e.g., no numeric data found after filtering, or only one data point).</em></p>
+    </div>
+    {% endif %}
+
+    {% if study_data_with_means %}
+    <div class="data-table-container">
+        <table class="data-table table table-hover">
+            <thead>
+                <tr>
+                    {% macro sortable_th(column_key, display_name, current_sort_by_val, current_sort_order_val, current_filter_val) %}
+                        {% set new_sort_order = 'asc' if current_sort_by_val == column_key and current_sort_order_val == 'desc' else 'desc' %}
+                        <th class="sortable-header">
+                            <a href="{{ url_for('mean_ctdivol_comparison', study_desc_filter=(current_filter_val if current_filter_val else ''), sort_by=column_key, sort_order=new_sort_order) }}">
+                                {{ display_name }}
+                                {% if current_sort_by_val == column_key %}
+                                    {% if current_sort_order_val == 'asc' %}<i class="fas fa-sort-up"></i>
+                                    {% else %}<i class="fas fa-sort-down"></i>{% endif %}
+                                {% else %}<i class="fas fa-sort"></i>{% endif %}
+                            </a>
+                        </th>
+                    {% endmacro %}
+
+                    {{ sortable_th('study_description', 'Study Description', current_sort_by, current_sort_order, selected_study) }}
+                    {{ sortable_th('mean_ctdivol', 'Mean CTDIvol (mGy)', current_sort_by, current_sort_order, selected_study) }}
+                    {{ sortable_th('number_of_reports', 'Number of Reports', current_sort_by, current_sort_order, selected_study) }}
+                    {{ sortable_th('total_scan_events', 'Total Scan Events (in mean)', current_sort_by, current_sort_order, selected_study) }}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in study_data_with_means %}
+                <tr>
+                    <td>{{ item.study_description }}</td>
+                    <td style="text-align: right;">
+                        {% if item.mean_ctdivol is not none %}
+                            {{ "%.2f"|format(item.mean_ctdivol) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">{{ item.number_of_reports }}</td>
+                    <td style="text-align: right;">{{ item.total_scan_events }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="no-data-info">
+            <p><i class="fas fa-info-circle"></i>
+            {% if selected_study %}
+                No CTDIvol data found for the selected Study Description: '<strong>{{ selected_study }}</strong>'.
+            {% else %}
+                No CTDIvol data available to display. Please upload CT DICOM files.
+            {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    <div class="nav-actions">
+        <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Reports List</a>
+        <a href="{{ url_for('compare_dlp') }}" class="btn btn-info"><i class="fas fa-chart-line"></i> Compare Total DLP</a>
+        <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home / Change Modality</a>
+    </div>
+
+</div>
+{% endblock %}

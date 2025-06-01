@@ -44,6 +44,7 @@ os.makedirs(os.path.join(STATIC_FOLDER, 'css'), exist_ok=True) # If you plan to 
 # In-memory report index (Replace with a database for production)
 REPORT_INDEX = []
 
+
 @app.context_processor
 def inject_current_year():
     """Injects the current year into all templates."""
@@ -718,7 +719,6 @@ def _create_excel_export(df, sheet_name, download_base_filename):
         flash(f"Error generating Excel file: {e}", "error")
         return None
 
-
 @app.route('/compare_dlp')
 def compare_dlp():
     """Compares Total DLP for CT reports, grouped by Study Description."""
@@ -776,6 +776,7 @@ def compare_dlp():
                            study_descriptions=study_descs_for_page, 
                            selected_study=selected_filter, current_modality='CT')
 
+
 @app.route('/export_excel_filtered')
 def export_excel_filtered():
     """Exports filtered CT DLP data to Excel."""
@@ -810,6 +811,419 @@ def export_excel_filtered():
     response = _create_excel_export(pd.DataFrame(records), study_desc_filter, "CT_DLP_Export")
     return response if response else redirect(url_for('compare_dlp'))
 
+@app.route('/mean_dlp_comparison')
+def mean_dlp_comparison():
+    if session.get('modality') != 'CT':
+        flash("Mean DLP Comparison is for CT modality only.", "warning")
+        return redirect(url_for('list_reports'))
+
+    ct_reports = [r for r in REPORT_INDEX if r['modality'] == 'CT']
+    if not ct_reports:
+        flash("No CT reports uploaded to calculate Mean DLP.", "info")
+        return render_template('mean_dlp_comparison.html',
+                               study_data_with_means=[],
+                               study_descriptions=[],
+                               selected_study=None,
+                               current_modality='CT',
+                               current_sort_by='study_description',
+                               current_sort_order='asc',
+                               plot_url_mean_dlp=None)
+
+    records_for_dlp = []
+    for report_meta in ct_reports:
+        try:
+            dicom_path = os.path.join(app.config['UPLOAD_FOLDER'], report_meta['save_name'])
+            if not os.path.exists(dicom_path): continue
+            ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
+            # ดึง total_dlp_val จาก extract_ct_dose_info
+            _, _, total_dlp_val = extract_ct_dose_info(ds) #
+            
+            raw_study_date = get_clean_value(ds, (0x0008,0x0020))
+
+            if report_meta.get('study_description', 'N/A') != 'N/A' and total_dlp_val is not None:
+                records_for_dlp.append({
+                    'Study Description': report_meta.get('study_description', '').strip(),
+                    'Total DLP': total_dlp_val, # ค่า Total DLP ของ report นี้
+                    'report_count_placeholder': 1, # เพื่อนับจำนวน report
+                    # เพิ่มข้อมูลอื่นๆ ที่อาจจำเป็นสำหรับการเรียงลำดับหรือแสดงผล
+                    'Patient ID': report_meta.get('Patient ID', 'N/A'),
+                    'study_date': report_meta.get('Study Date', ''),
+                    'raw_study_date': raw_study_date if raw_study_date and str(raw_study_date).isdigit() and len(str(raw_study_date)) == 8 else None,
+                    'filename': report_meta.get('filename', '')
+                })
+        except Exception as e:
+            print(f"Error processing '{report_meta['filename']}' for Mean DLP calculation: {e}")
+
+    if not records_for_dlp:
+        flash("No CT reports with valid Total DLP data.", "info")
+        return render_template('mean_dlp_comparison.html',
+                               study_data_with_means=[],
+                               study_descriptions=[],
+                               selected_study=None,
+                               current_modality='CT',
+                               current_sort_by='study_description',
+                               current_sort_order='asc',
+                               plot_url_mean_dlp=None)
+
+    df_dlp = pd.DataFrame(records_for_dlp)
+    
+    study_summary_list_dlp = []
+    for study_desc, group in df_dlp.groupby('Study Description'):
+        # ค่า Total DLP เป็นต่อ report ไม่ใช่ต่อ event เหมือน CTDIvol
+        # ดังนั้น mean DLP คือค่าเฉลี่ยของ Total DLP จากแต่ละ report ใน group นั้น
+        mean_dlp_val = group['Total DLP'].mean() if not group['Total DLP'].empty else None
+        num_reports = group['report_count_placeholder'].sum()
+        
+        study_summary_list_dlp.append({
+            'study_description': study_desc,
+            'mean_dlp': mean_dlp_val,
+            'number_of_reports': num_reports
+        })
+
+    # การเรียงลำดับข้อมูล study_summary_list_dlp
+    sort_by = request.args.get('sort_by', 'study_description')
+    sort_order = request.args.get('sort_order', 'asc')
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'asc'
+    
+    is_reverse = (sort_order == 'desc')
+
+    def sort_key_dlp_summary(item): # สร้าง sort key function ใหม่สำหรับ dlp summary
+        val = item.get(sort_by)
+        if val is None:
+            return float('-inf') if sort_order == 'asc' else float('inf')
+        if sort_by in ['mean_dlp', 'number_of_reports']: # Key ที่เป็นตัวเลข
+            try: return float(val)
+            except (ValueError, TypeError): return float('-inf') if sort_order == 'asc' else float('inf')
+        if isinstance(val, str):
+            return val.lower()
+        return val
+
+    try:
+        study_summary_list_dlp.sort(key=sort_key_dlp_summary, reverse=is_reverse)
+    except TypeError as e:
+        flash(f"Could not sort DLP summary data by '{sort_by}'. Error: {e}", "warning")
+
+    all_study_descriptions_dlp = sorted(list(df_dlp['Study Description'].unique()))
+    selected_study_filter_dlp = request.args.get('study_desc_filter')
+
+    data_for_page = study_summary_list_dlp
+    if selected_study_filter_dlp:
+        data_for_page = [s for s in study_summary_list_dlp if s['study_description'] == selected_study_filter_dlp]
+
+    # --- สร้างข้อมูลสำหรับ Chart Mean DLP ---
+    plot_url_mean_dlp = None
+    if data_for_page:
+        chart_data_points_dlp = [item for item in data_for_page if item.get('mean_dlp') is not None]
+        if chart_data_points_dlp:
+            study_descs_for_chart_dlp = [item['study_description'] for item in chart_data_points_dlp]
+            mean_values_for_chart_dlp = [item['mean_dlp'] for item in chart_data_points_dlp]
+            
+            if study_descs_for_chart_dlp and mean_values_for_chart_dlp:
+                 plot_url_mean_dlp = _generate_comparison_plot(
+                    x_data=study_descs_for_chart_dlp,
+                    y_data=mean_values_for_chart_dlp,
+                    x_label='Study Description',
+                    y_label='Mean Total DLP (mGy·cm)',
+                    title_prefix='Mean Total DLP Comparison',
+                    group_name=selected_study_filter_dlp if selected_study_filter_dlp else 'All Studies'
+                ) #
+
+    return render_template('mean_dlp_comparison.html', # ชื่อ template ใหม่
+                           study_data_with_means=data_for_page,
+                           study_descriptions=all_study_descriptions_dlp,
+                           selected_study=selected_study_filter_dlp,
+                           current_modality='CT',
+                           current_sort_by=sort_by,
+                           current_sort_order=sort_order,
+                           plot_url_mean_dlp=plot_url_mean_dlp)
+
+
+# --- เพิ่ม Route สำหรับ Export Excel ของ Mean DLP ---
+@app.route('/export_mean_dlp_excel')
+def export_mean_dlp_excel():
+    if session.get('modality') != 'CT':
+        flash("Excel export for Mean DLP is for CT modality only.", "error")
+        return redirect(url_for('list_reports'))
+
+    # Logic การดึงและคำนวณข้อมูล Mean DLP (คล้ายกับใน mean_dlp_comparison)
+    ct_reports = [r for r in REPORT_INDEX if r['modality'] == 'CT']
+    if not ct_reports:
+        flash("No CT reports data to export.", "info")
+        return redirect(url_for('mean_dlp_comparison'))
+
+    records_for_dlp_export = []
+    for report_meta in ct_reports:
+        try:
+            dicom_path = os.path.join(app.config['UPLOAD_FOLDER'], report_meta['save_name'])
+            if not os.path.exists(dicom_path): continue
+            ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
+            _, _, total_dlp_val = extract_ct_dose_info(ds) #
+            if report_meta.get('study_description', 'N/A') != 'N/A' and total_dlp_val is not None:
+                records_for_dlp_export.append({
+                    'Study Description': report_meta.get('study_description', '').strip(),
+                    'Total DLP': total_dlp_val,
+                    'report_count_placeholder': 1
+                })
+        except Exception as e:
+            print(f"Error processing '{report_meta['filename']}' for Excel export (Mean DLP): {e}")
+
+    if not records_for_dlp_export:
+        flash("No valid Total DLP data to export.", "info")
+        return redirect(url_for('mean_dlp_comparison'))
+
+    df_dlp_export = pd.DataFrame(records_for_dlp_export)
+    
+    study_summary_for_excel_dlp = []
+    for study_desc, group in df_dlp_export.groupby('Study Description'):
+        mean_dlp_val = group['Total DLP'].mean() if not group['Total DLP'].empty else None
+        num_reports = group['report_count_placeholder'].sum()
+        study_summary_for_excel_dlp.append({
+            'Study Description': study_desc,
+            'Mean Total DLP (mGy.cm)': round(mean_dlp_val, 2) if mean_dlp_val is not None else 'N/A',
+            'Number of Reports': num_reports
+        })
+
+    if not study_summary_for_excel_dlp:
+        flash("No summary DLP data to export to Excel.", "info")
+        return redirect(url_for('mean_dlp_comparison'))
+
+    df_final_export = pd.DataFrame(study_summary_for_excel_dlp)
+    
+    study_desc_filter_export_dlp = request.args.get('study_desc_filter')
+    if study_desc_filter_export_dlp:
+        df_final_export = df_final_export[df_final_export['Study Description'] == study_desc_filter_export_dlp]
+        if df_final_export.empty:
+            flash(f"No data to export for filtered Study Description: {study_desc_filter_export_dlp}", "info")
+            return redirect(url_for('mean_dlp_comparison', study_desc_filter=study_desc_filter_export_dlp))
+        sheet_name = f"MeanDLP_{study_desc_filter_export_dlp[:20]}"
+    else:
+        sheet_name = 'Mean DLP Summary'
+
+    response = _create_excel_export(df_final_export, sheet_name, "Mean_DLP_Summary_Export") #
+    return response if response else redirect(url_for('mean_dlp_comparison'))
+
+@app.route('/mean_ctdivol_comparison')
+def mean_ctdivol_comparison():
+    if session.get('modality') != 'CT':
+        flash("Mean CTDIvol Comparison is for CT modality only.", "warning")
+        return redirect(url_for('list_reports'))
+
+    # ... (Logic การดึงข้อมูล ct_reports และ records_for_ctdivol เหมือนเดิม) ...
+    ct_reports = [r for r in REPORT_INDEX if r['modality'] == 'CT']
+    # ... (ส่วนการสร้าง records_for_ctdivol ทั้งหมด ... )
+    if not ct_reports: # เพิ่มการตรวจสอบนี้
+        flash("No CT reports uploaded to calculate Mean CTDIvol.", "info")
+        return render_template('mean_ctdivol_comparison.html',
+                               study_data_with_means=[],
+                               study_descriptions=[],
+                               selected_study=None,
+                               current_modality='CT',
+                               current_sort_by='study_description',
+                               current_sort_order='asc',
+                               plot_url_mean_ctdivol=None) # ส่ง plot_url_mean_ctdivol เป็น None
+
+    records_for_ctdivol = []
+    # ... (ใส่โค้ดการวนลูป ct_reports และ append to records_for_ctdivol ที่นี่ - เหมือนกับใน export route) ...
+    for report_meta in ct_reports:
+        try:
+            dicom_path = os.path.join(app.config['UPLOAD_FOLDER'], report_meta['save_name'])
+            if not os.path.exists(dicom_path): continue
+            ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
+            _, ct_series_data, _ = extract_ct_dose_info(ds) #
+
+            ctdivol_values_for_report = []
+            if ct_series_data:
+                for event_item in ct_series_data:
+                    if event_item.get('Type') != 'Scout/Localizer' and \
+                       event_item.get('CTDIvol') not in [None, '', 'N/A']:
+                        try:
+                            ctdivol_values_for_report.append(float(event_item['CTDIvol']))
+                        except (ValueError, TypeError):
+                            pass
+            
+            if report_meta.get('study_description', 'N/A') != 'N/A':
+                records_for_ctdivol.append({
+                    'Study Description': report_meta.get('study_description', '').strip(),
+                    'ctdivol_events': ctdivol_values_for_report,
+                    'report_count_placeholder': 1 
+                })
+        except Exception as e:
+            print(f"Error processing '{report_meta['filename']}' for Mean CTDIvol calculation: {e}")
+
+
+    if not records_for_ctdivol:
+        flash("No CT reports with valid CTDIvol data.", "info")
+        return render_template('mean_ctdivol_comparison.html',
+                               study_data_with_means=[],
+                               study_descriptions=[],
+                               selected_study=None,
+                               current_modality='CT',
+                               current_sort_by='study_description',
+                               current_sort_order='asc',
+                               plot_url_mean_ctdivol=None) # ส่ง plot_url_mean_ctdivol เป็น None
+
+    df_ctdivol = pd.DataFrame(records_for_ctdivol)
+    
+    study_summary_list = []
+    # ... (Logic การคำนวณ study_summary_list เหมือนเดิม) ...
+    for study_desc, group in df_ctdivol.groupby('Study Description'):
+        all_events_for_study = []
+        for event_list in group['ctdivol_events']:
+            all_events_for_study.extend(event_list)
+        mean_val = None
+        if all_events_for_study:
+            mean_val = sum(all_events_for_study) / len(all_events_for_study)
+        num_reports = group['report_count_placeholder'].sum()
+        study_summary_list.append({
+            'study_description': study_desc,
+            'mean_ctdivol': mean_val,
+            'number_of_reports': num_reports,
+            'total_scan_events': len(all_events_for_study)
+        })
+
+    # --- การเรียงลำดับ study_summary_list (เหมือนเดิม) ---
+    sort_by = request.args.get('sort_by', 'study_description')
+    sort_order = request.args.get('sort_order', 'asc')
+    if sort_order not in ['asc', 'desc']: sort_order = 'asc'
+    is_reverse = (sort_order == 'desc')
+    # ... (ฟังก์ชัน sort_key_summary และการ sort study_summary_list) ...
+    def sort_key_summary(item): # คัดลอกฟังก์ชัน sort_key_summary มาไว้ตรงนี้ด้วย
+        val = item.get(sort_by)
+        if val is None:
+            return float('-inf') if sort_order == 'asc' else float('inf')
+        if sort_by in ['mean_ctdivol', 'number_of_reports', 'total_scan_events']:
+            try: return float(val)
+            except (ValueError, TypeError): return float('-inf') if sort_order == 'asc' else float('inf')
+        if isinstance(val, str):
+            return val.lower()
+        return val
+    try:
+        study_summary_list.sort(key=sort_key_summary, reverse=is_reverse)
+    except TypeError as e:
+        flash(f"Could not sort summary data by '{sort_by}'. Error: {e}", "warning")
+
+
+    all_study_descriptions = sorted(list(df_ctdivol['Study Description'].unique()))
+    selected_study_filter = request.args.get('study_desc_filter')
+
+    # กรอง study_summary_list ก่อนสร้าง chart ถ้ามีการ filter
+    data_for_chart_and_table = study_summary_list
+    if selected_study_filter:
+        data_for_chart_and_table = [s for s in study_summary_list if s['study_description'] == selected_study_filter]
+
+    # --- สร้างข้อมูลสำหรับ Chart ---
+    plot_url_mean_ctdivol = None
+    if data_for_chart_and_table:
+        # กรองเอาเฉพาะรายการที่มี mean_ctdivol (ไม่เป็น None)
+        chart_data_points = [item for item in data_for_chart_and_table if item.get('mean_ctdivol') is not None]
+        if chart_data_points:
+            study_descs_for_chart = [item['study_description'] for item in chart_data_points]
+            mean_values_for_chart = [item['mean_ctdivol'] for item in chart_data_points]
+            
+            if study_descs_for_chart and mean_values_for_chart: # ตรวจสอบว่ามีข้อมูลให้ plot จริงๆ
+                 plot_url_mean_ctdivol = _generate_comparison_plot(
+                    x_data=study_descs_for_chart,
+                    y_data=mean_values_for_chart,
+                    x_label='Study Description',
+                    y_label='Mean CTDIvol (mGy per scan event)',
+                    title_prefix='Mean CTDIvol Comparison',
+                    group_name=selected_study_filter if selected_study_filter else 'All Studies'
+                ) #
+
+    return render_template('mean_ctdivol_comparison.html',
+                           study_data_with_means=data_for_chart_and_table, # ใช้ข้อมูลที่อาจจะ filter แล้วสำหรับตาราง
+                           study_descriptions=all_study_descriptions,
+                           selected_study=selected_study_filter,
+                           current_modality='CT',
+                           current_sort_by=sort_by,
+                           current_sort_order=sort_order,
+                           plot_url_mean_ctdivol=plot_url_mean_ctdivol) # ส่ง URL ของ chart ไป
+
+
+@app.route('/export_mean_ctdivol_excel')
+def export_mean_ctdivol_excel():
+    if session.get('modality') != 'CT':
+        flash("Excel export for Mean CTDIvol is for CT modality only.", "error")
+        return redirect(url_for('list_reports'))
+
+    # Logic การดึงและคำนวณข้อมูล Mean CTDIvol (คล้ายกับใน mean_ctdivol_comparison)
+    ct_reports = [r for r in REPORT_INDEX if r['modality'] == 'CT']
+    if not ct_reports:
+        flash("No CT reports data to export.", "info")
+        return redirect(url_for('mean_ctdivol_comparison'))
+
+    records_for_ctdivol = []
+    for report_meta in ct_reports:
+        try:
+            dicom_path = os.path.join(app.config['UPLOAD_FOLDER'], report_meta['save_name'])
+            if not os.path.exists(dicom_path): continue
+            ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
+            _, ct_series_data, _ = extract_ct_dose_info(ds) #
+
+            ctdivol_values_for_report = []
+            if ct_series_data:
+                for event_item in ct_series_data:
+                    if event_item.get('Type') != 'Scout/Localizer' and \
+                       event_item.get('CTDIvol') not in [None, '', 'N/A']:
+                        try:
+                            ctdivol_values_for_report.append(float(event_item['CTDIvol']))
+                        except (ValueError, TypeError):
+                            pass
+            
+            if report_meta.get('study_description', 'N/A') != 'N/A':
+                records_for_ctdivol.append({
+                    'Study Description': report_meta.get('study_description', '').strip(),
+                    'ctdivol_events': ctdivol_values_for_report,
+                    'report_count_placeholder': 1
+                })
+        except Exception as e:
+            print(f"Error processing '{report_meta['filename']}' for Excel export (Mean CTDIvol): {e}")
+
+    if not records_for_ctdivol:
+        flash("No valid CTDIvol data to export.", "info")
+        return redirect(url_for('mean_ctdivol_comparison'))
+
+    df_ctdivol = pd.DataFrame(records_for_ctdivol)
+    
+    study_summary_for_excel = []
+    for study_desc, group in df_ctdivol.groupby('Study Description'):
+        all_events_for_study = []
+        for event_list in group['ctdivol_events']:
+            all_events_for_study.extend(event_list)
+        
+        mean_val = None
+        if all_events_for_study:
+            mean_val = sum(all_events_for_study) / len(all_events_for_study)
+        
+        num_reports = group['report_count_placeholder'].sum()
+        
+        study_summary_for_excel.append({
+            'Study Description': study_desc,
+            'Mean CTDIvol (mGy per scan event)': round(mean_val, 2) if mean_val is not None else 'N/A',
+            'Number of Reports': num_reports,
+            'Total Scan Events Used': len(all_events_for_study)
+        })
+
+    if not study_summary_for_excel:
+        flash("No summary data to export to Excel.", "info")
+        return redirect(url_for('mean_ctdivol_comparison'))
+
+    df_export = pd.DataFrame(study_summary_for_excel)
+    
+    # Filter by study_desc_filter if provided in query args (สำหรับการ export ที่ filter แล้ว)
+    study_desc_filter_export = request.args.get('study_desc_filter')
+    if study_desc_filter_export:
+        df_export = df_export[df_export['Study Description'] == study_desc_filter_export]
+        if df_export.empty:
+            flash(f"No data to export for filtered Study Description: {study_desc_filter_export}", "info")
+            return redirect(url_for('mean_ctdivol_comparison', study_desc_filter=study_desc_filter_export))
+        sheet_name = study_desc_filter_export[:30] # จำกัดความยาวชื่อ sheet
+    else:
+        sheet_name = 'Mean CTDIvol Summary'
+
+    response = _create_excel_export(df_export, sheet_name, "Mean_CTDIvol_Summary_Export") #
+    return response if response else redirect(url_for('mean_ctdivol_comparison'))
 
 @app.route('/compare_dap')
 def compare_dap():

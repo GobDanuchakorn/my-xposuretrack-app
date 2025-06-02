@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Average MG Organ Dose{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+    .container {
+        max-width: 1000px;
+        margin: 20px auto;
+        background: #fff;
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    .page-title {
+        color: #1a4a73;
+        font-size: 1.8em;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 15px;
+        margin-top: 0;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+    }
+    .page-title i { margin-right: 12px; font-size: 1.2em; }
+
+    .filter-export-section {
+        background-color: #f8f9fa;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        border: 1px solid #dee2e6;
+    }
+    .filter-form { 
+        display: flex; 
+        gap: 15px; 
+        align-items: center; 
+        flex-wrap: wrap; 
+    }
+    .filter-form label { font-weight: 600; color: #495057; margin-bottom: 0; }
+    .filter-form .form-select {
+        padding: 0.475rem 0.75rem; font-size: 0.95rem; border-radius: 0.25rem;
+        border: 1px solid #ced4da; flex-grow: 1; min-width: 200px;
+    }
+    .filter-form .btn { font-size: 0.875em; padding: 0.3rem 0.6rem; }
+    
+    .export-button-container { margin-top: 10px; text-align: right; } /* Added margin-top */
+    .export-button-container .btn-success { font-weight: 600; }
+
+    .chart-container {
+        text-align: center; margin-top: 20px; margin-bottom: 30px;
+        background-color: #fff; padding: 20px; border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07); border: 1px solid #e9ecef;
+    }
+    .chart-container h4 { margin-top: 0; margin-bottom: 15px; color: #1a4a73; font-size: 1.3em; }
+    .chart-container img { max-width: 100%; height: auto; border-radius: 6px; }
+    .chart-container .no-chart-message { color: #6c757d; font-style: italic; }
+
+    .data-table-container {
+        margin-top: 20px; background-color: #fff; padding: 0;
+        border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        border: 1px solid #e9ecef; overflow-x: auto;
+    }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    table.data-table th, table.data-table td {
+        padding: 10px 12px; text-align: left; vertical-align: middle;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    table.data-table td:first-child, table.data-table th:first-child { padding-left: 20px; }
+    table.data-table td:last-child, table.data-table th:last-child { padding-right: 20px; }
+    table.data-table thead th {
+        background-color: #e9ecef; color: #495057; font-weight: 600;
+        white-space: nowrap; border-top: none; border-bottom-width: 2px;
+    }
+    table.data-table tbody tr:hover { background-color: #f1f7ff; }
+    table.data-table td.numeric-value { 
+        text-align: right; 
+        font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    .no-data-info {
+        background-color: #fff3cd; color: #856404; padding: 20px;
+        border: 1px solid #ffeeba; border-radius: 8px; text-align: center;
+        margin: 25px 0; font-size: 1em;
+    }
+    .no-data-info i { margin-right: 8px; font-size: 1.2em; }
+
+    .nav-actions {
+        margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef;
+        display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+    }
+    .nav-actions .btn {
+        display: inline-flex; align-items: center; padding: 10px 18px;
+        font-size: 0.95em; font-weight: 600; text-decoration: none;
+        border-radius: 6px; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+        border: 1px solid transparent;
+    }
+    .nav-actions .btn i { margin-right: 8px; }
+
+    @media (max-width: 768px) {
+        .filter-form { flex-direction: column; align-items: stretch; }
+        .filter-form .form-select, .filter-form .btn { width: 100%; }
+        .export-button-container { text-align: center; }
+        .filter-form > div { width: 100%;} /* Make filter groups full width */
+    }
+    .filter-group { display: flex; align-items: center; gap: 10px; flex-grow: 1; }
+    .filter-group label { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title"><i class="fas fa-syringe"></i>Average Organ Dose Comparison (MG Modality)</h1>
+    {% if filter_active_message %}
+        <p class="text-info"><em>Displaying data filtered by: {{ filter_active_message }}</em></p>
+    {% endif %}
+
+    <div class="filter-export-section">
+        <form method="get" action="{{ url_for('compare_mg_organ_dose') }}" class="filter-form" id="mgOrganDoseFilterForm">
+            <div class="filter-group">
+                <label for="body_part_filter_select_mg">Body Part:</label>
+                <select name="body_part_filter" id="body_part_filter_select_mg" class="form-select">
+                    <option value="">All Body Parts</option>
+                    {% for bp in body_parts_examined %}
+                        <option value="{{ bp }}" {% if bp == selected_body_part_filter %}selected{% endif %}>{{ bp }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="view_position_filter_select_mg">View Position:</label>
+                <select name="view_position_filter" id="view_position_filter_select_mg" class="form-select">
+                    <option value="">All View Positions</option>
+                    {% for vp in view_positions %}
+                        <option value="{{ vp }}" {% if vp == selected_view_position_filter %}selected{% endif %}>{{ vp }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Apply Filters</button>
+            <a href="{{ url_for('compare_mg_organ_dose') }}" class="btn btn-outline-secondary btn-sm">Clear Filters</a>
+        </form>
+        {% if summary_data %}
+        <div class="export-button-container">
+            <a href="{{ url_for('export_excel_mg_organ_dose_avg', body_part_filter=selected_body_part_filter, view_position_filter=selected_view_position_filter) }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Export to Excel
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+
+    {% if plot_url_mg_organ_dose %}
+    <div class="chart-container">
+        <h4>Average Organ Dose per Patient per Day</h4>
+        <img src="{{ plot_url_mg_organ_dose }}" alt="Average MG Organ Dose Comparison Chart">
+    </div>
+    {% elif summary_data and not plot_url_mg_organ_dose %}
+    <div class="chart-container">
+        <p class="no-chart-message"><em>Chart could not be generated (e.g., only one data point found after filtering, or no numeric data available).</em></p>
+    </div>
+    {% endif %}
+
+    {% if summary_data %}
+    <div class="data-table-container">
+        <table class="data-table table table-hover">
+            <thead>
+                <tr>
+                    <th>Patient ID</th>
+                    <th>Study Date</th>
+                    <th style="text-align: right;">Average {{ TARGET_ORGAN_DOSE_UNIT_LABEL_MG }}</th>
+                    <th style="text-align: right;">Number of Studies Averaged</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in summary_data %}
+                <tr>
+                    <td>{{ item['Patient ID'] }}</td>
+                    <td>{{ item['Study Date'] }}</td>
+                    <td class="numeric-value">
+                        {% if item.average_organ_dose is not none %}
+                            {{ "%.4f"|format(item.average_organ_dose) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td class="numeric-value">{{ item.number_of_studies }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="no-data-info">
+            <p><i class="fas fa-info-circle"></i>
+            {% if selected_body_part_filter or selected_view_position_filter %}
+                No MG Organ Dose data found matching the selected filters.
+            {% else %}
+                No MG Organ Dose data available to display. Please upload MG DICOM files.
+            {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    <div class="nav-actions">
+        <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Reports List</a>
+        <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home / Change Modality</a>
+    </div>
+
+</div>
+{% endblock %}

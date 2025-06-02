@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Dose Comparison for Patient {{ patient_id }} ({{ current_modality }}){% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+    /* Styles inherited from base.html. Page-specific styles below. */
+    .container { 
+        max-width: 850px; 
+        margin: 20px auto;
+        background: #fff;
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 15px;
+        margin-bottom: 25px;
+    }
+    .page-header h1 {
+        margin: 0;
+        color: #1a4a73;
+        font-size: 1.8em;
+        display: flex;
+        align-items: center;
+        word-break: break-word; 
+    }
+    .page-header h1 i {
+        margin-right: 12px;
+        font-size: 1.2em; 
+    }
+    .page-header .patient-id-highlight {
+        color: #007bff; 
+        font-weight: 600;
+    }
+     .page-header .modality-badge-compare {
+        background-color: #17a2b8; 
+        color: white;
+        padding: 5px 10px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        font-weight: 500;
+        margin-left: 10px;
+    }
+
+    .plot-card, .table-card {
+        background: #fff; 
+        border: 1px solid #e3e3e3;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        margin-bottom: 30px;
+        overflow: hidden; 
+    }
+    .plot-card .card-header, .table-card .card-header {
+        background-color: #e9ecef;
+        padding: 12px 20px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .plot-card .card-header h2, .table-card .card-header h2 {
+        margin: 0;
+        font-size: 1.3em; 
+        color: #1a4a73;
+        font-weight: 600;
+    }
+    .plot-card .card-body {
+        padding: 20px;
+        text-align: center; 
+    }
+    .plot-card .card-body img.comparison-chart { 
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .table-card .card-body { padding: 0; }
+    .table-responsive { overflow-x: auto; }
+    table.data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+    }
+    table.data-table th, table.data-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    table.data-table thead th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+        border-top: 1px solid #dee2e6; 
+    }
+    table.data-table tbody tr:hover { background-color: #f1f8ff; }
+    table.data-table td a.btn-view-report { 
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        font-size: 0.85em;
+        font-weight: 500;
+        text-decoration: none;
+        border-radius: 5px;
+        color: #007bff; 
+        border: 1px solid #007bff;
+        background-color: transparent;
+        transition: background-color 0.2s, color 0.2s;
+    }
+    table.data-table td a.btn-view-report:hover { background-color: #007bff; color: white; }
+    table.data-table td a.btn-view-report i { margin-right: 4px; }
+    table.data-table th:nth-child(3), table.data-table td:nth-child(3) { text-align: right; } 
+    table.data-table th:last-child, table.data-table td:last-child { text-align: center; } 
+
+    .nav-actions {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+    }
+    .nav-actions .btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 18px;
+        font-size: 0.95em;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 6px;
+        transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+        border: 1px solid transparent;
+    }
+    .nav-actions .btn i { margin-right: 8px; }
+    .nav-actions .btn-secondary { background-color: #6c757d; color: white; border-color: #6c757d;}
+    .nav-actions .btn-secondary:hover { background-color: #545b62; border-color: #545b62;}
+    .nav-actions .btn-info { background-color: #17a2b8; color: white; border-color: #17a2b8;}
+    .nav-actions .btn-info:hover { background-color: #117a8b; border-color: #117a8b;}
+
+    .no-data-info {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 15px 20px;
+        border: 1px solid #ffeeba;
+        border-radius: 8px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .no-data-info i { margin-right: 8px;}
+    
+    @media (max-width: 768px) {
+        .container { padding: 20px 15px; }
+        .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1><i class="fas fa-user-chart"></i>Dose Comparison for Patient: 
+            <span class="patient-id-highlight">{{ patient_id }}</span>
+        </h1>
+        {% if current_modality %}
+            <span class="modality-badge-compare">Modality: {{ current_modality }}</span>
+        {% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <ul class="flash-messages"> 
+            {% for category, message in messages %}
+            <li class="{{ category }}">
+                {% if category == 'error' %}<i class="fas fa-times-circle"></i>
+                {% elif category == 'success' %}<i class="fas fa-check-circle"></i>
+                {% elif category == 'warning' %}<i class="fas fa-exclamation-triangle"></i>
+                {% elif category == 'info' %}<i class="fas fa-info-circle"></i>
+                {% endif %}
+                {{ message }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    {% endwith %}
+
+    {% if plot_url %}
+        <div class="plot-card">
+            <div class="card-header">
+                <h2><i class="fas fa-chart-bar"></i>{{ value_label or 'Dose' }} Trend</h2>
+            </div>
+            <div class="card-body">
+                <img class="comparison-chart" src="{{ plot_url }}" alt="{{ value_label or 'Dose' }} Chart for Patient {{ patient_id }}">
+            </div>
+        </div>
+    {% elif studies and studies|length > 0 %} 
+        <div class="no-data-info">
+            <p><i class="fas fa-info-circle"></i> No plot could be generated. Ensure studies have numeric dose values.</p>
+        </div>
+    {% endif %}
+
+    {% if studies and studies|length > 0 %}
+        <div class="table-card">
+            <div class="card-header">
+                <h2><i class="fas fa-list-ol"></i>Study Details for Patient {{ patient_id }}</h2>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                        <tr>
+                            <th>{{ 'Study Description' if current_modality == 'CT' or current_modality == 'MG' else 'Body Part' }}</th>
+                            <th>Study Date</th>
+                            <th>{{ value_label or 'Dose Value' }}</th> 
+                            <th>Filename</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for study_item in studies %}
+                        <tr>
+                            <td>
+                                {% if current_modality == 'CT' %}
+                                    {{ study_item.study_description or 'N/A' }}
+                                {% elif current_modality == 'DX' %}
+                                    {{ study_item.body_part or 'N/A' }}
+                                {% elif current_modality == 'MG' %}
+                                    {{ study_item.study_description or 'N/A' }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ study_item.study_date or 'N/A' }}</td>
+                            <td>
+                                {% if study_item.value is number %}
+                                    {% if current_modality == 'MG' %}
+                                         {{ "%.4f"|format(study_item.value) }}
+                                    {% else %}
+                                         {{ "%.2f"|format(study_item.value) }}
+                                    {% endif %}
+                                {% elif study_item.value is not none and study_item.value|string|lower != 'n/a' and "invalid" not in study_item.value|string|lower %}
+                                     {# Attempt to format if it's a string representation of a number #}
+                                     {% if current_modality == 'MG' %}
+                                        {{ "%.4f"|format(study_item.value|float) }}
+                                     {% else %}
+                                        {{ "%.2f"|format(study_item.value|float) }}
+                                     {% endif %}
+                                {% elif study_item.value %}
+                                    {{ study_item.value }} {# Display 'N/A' or 'Invalid' as is #}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ study_item.filename | truncate(25, True) }}</td>
+                            <td>
+                                <a href="{{ url_for('view_report', report_id=study_item.report_id) }}" class="btn-view-report" title="View full report">
+                                    <i class="fas fa-eye"></i> View Report
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% elif not plot_url %} 
+        <div class="no-data-info">
+            <p><i class="fas fa-exclamation-circle"></i> No dose data or studies found for Patient <span class="patient-id-highlight">{{ patient_id }}</span> in {{ current_modality }} modality.</p>
+        </div>
+    {% endif %}
+    
+    <div class="nav-actions">
+        <a href="{{ url_for('search_patient') }}" class="btn btn-info"><i class="fas fa-search"></i> Back to Patient Search</a>
+        <a href="{{ url_for('list_reports') }}" class="btn btn-secondary"><i class="fas fa-list-alt"></i> View All Reports</a>
+        <a href="{{ url_for('select_modality') }}" class="btn btn-secondary"><i class="fas fa-home"></i> Home / Change Modality</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{# Any page-specific JavaScript for compare_patient.html would go here #}
+{% endblock %}
